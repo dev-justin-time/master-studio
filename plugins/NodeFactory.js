@@ -2,7 +2,7 @@
  * NodeFactory - Shared builder for visual node DOM cards.
  *
  * Every plugin's `nodes` map calls this to produce consistent,
- * styled node cards for the node graph UI sidebar.
+ * styled node cards for the node graph UI.
  */
 export function createNodeCard(x, y, label, inputs = [], outputs = []) {
   const card = document.createElement('div');
@@ -103,7 +103,8 @@ function _enableDrag(card) {
   let startX, startY, origLeft, origTop;
 
   card.addEventListener('mousedown', e => {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    // Don't drag when interacting with buttons, inputs, or selects
+    if (['INPUT', 'TEXTAREA', 'BUTTON', 'SELECT'].includes(e.target.tagName)) return;
     dragging = true;
     startX = e.clientX;
     startY = e.clientY;

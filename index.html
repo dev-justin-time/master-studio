@@ -154,6 +154,116 @@
       background: #3a3a3a;
       border-color: #555;
     }
+
+    #toolbar button.active {
+      background: #4a9eff;
+      border-color: #4a9eff;
+      color: #fff;
+    }
+
+    /* ── Drop Zone ── */
+    #drop-zone {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 255, 136, 0.08);
+      border: 3px dashed #00ff88;
+      z-index: 100;
+      pointer-events: none;
+    }
+
+    #drop-zone.active {
+      display: flex;
+    }
+
+    #drop-zone-text {
+      color: #00ff88;
+      font-size: 18px;
+      font-weight: 600;
+      pointer-events: none;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    }
+
+    /* ── Node Cards ── */
+    .node-card {
+      background: #252525;
+      border: 1px solid #444;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+      min-width: 180px;
+      font-size: 12px;
+      color: #ddd;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    }
+
+    .node-card .node-header {
+      font-weight: 700;
+      font-size: 12px;
+      letter-spacing: 0.3px;
+      margin-bottom: 8px;
+      color: #00ff88;
+      border-bottom: 1px solid #333;
+      padding-bottom: 4px;
+    }
+
+    .node-card .node-body {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .node-card .node-body label {
+      font-size: 11px;
+      color: #aaa;
+    }
+
+    .node-card .node-input {
+      background: #1a1a1a;
+      border: 1px solid #444;
+      border-radius: 4px;
+      color: #eee;
+      padding: 4px 6px;
+      font-size: 11px;
+      width: 100%;
+    }
+
+    .node-card .node-input:focus {
+      outline: none;
+      border-color: #00ff88;
+    }
+
+    .node-card .run-node-btn {
+      background: #2a4a3a;
+      border: 1px solid #00ff88;
+      color: #00ff88;
+      padding: 6px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 600;
+      width: 100%;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .node-card .run-node-btn:hover {
+      background: #00ff88;
+      color: #111;
+    }
+
+    .node-card .node-outputs {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #333;
+      font-size: 11px;
+      color: #888;
+    }
   </style>
 </head>
 <body>
@@ -162,6 +272,9 @@
     <div id="viewport">
       <canvas id="renderCanvas"></canvas>
       <canvas id="lassoOverlay" style="position:absolute;top:0;left:0;width:100%;height:100%;display:none;pointer-events:none;z-index:10;"></canvas>
+      <div id="drop-zone">
+        <div id="drop-zone-text">Drop point cloud or CAD file here</div>
+      </div>
       <div id="controls-hint" style="position:absolute;bottom:12px;left:12px;font-size:11px;color:#555;font-family:monospace;pointer-events:none;z-index:5;">
         <b>G</b> Move &nbsp; <b>R</b> Rotate &nbsp; <b>S</b> Scale &nbsp; <b>L</b> Lasso &nbsp; <b>T</b> Sticky &nbsp; <b>P</b> Debug &nbsp; <b>1-3</b> Color Select
       </div>
@@ -188,9 +301,13 @@
         <button id="btn-translate" title="Translate mode (G)">↔ Move</button>
         <button id="btn-rotate" title="Rotate mode (R)">↻ Rotate</button>
         <button id="btn-scale" title="Scale mode (S)">⤢ Scale</button>
+        <button id="btn-import" title="Import point cloud or CAD file">📥 Import</button>
         <span id="sticky-indicator" style="font-size:10px;color:#888;padding:6px;align-self:center;">Sticky: OFF</span>
         <button id="btn-debug" title="Toggle physics debug overlay (P)">🐛 Debug</button>
       </div>
+
+      <!-- Import file input (hidden) -->
+      <input type="file" id="import-file-input" accept=".las,.ply,.step,.iges,.stp,.igs" style="display:none;" />
 
       <!-- StateManager Debug Panel -->
       <div id="state-debug-panel" style="border-top:1px solid #333;padding:10px;font-family:monospace;font-size:10px;color:#aaa;max-height:140px;overflow:hidden;">

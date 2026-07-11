@@ -3,6 +3,7 @@
  * Handles CSG booleans, mesh decimation, BVH generation, and physics simulation.
  */
 import * as THREE from 'three';
+import { RustGeometryBridge } from '../bindings/WasmBridge.js';
 
 export const RustPlugin = {
   name: 'Rust',
@@ -13,10 +14,10 @@ export const RustPlugin = {
 
   async init(state) {
     this._state = state;
-    
+
     // Initialize Rust Wasm module
     await this._initWasm();
-    
+
     state.on('rust:task:queued', (task) => {
       this._processQueue();
     });
@@ -24,13 +25,14 @@ export const RustPlugin = {
 
   async _initWasm() {
     try {
-      // In production, this imports the compiled Rust Wasm
-      // const wasm = await import('../wasm/rust_core_bg.wasm');
-      // this._wasmModule = wasm;
+      // The actual Wasm module is loaded by bindings/WasmBridge.js.
+      // RustGeometryBridge exposes the geometry functions and gracefully
+      // degrades if the Wasm binary is unavailable.
+      this._wasmModule = RustGeometryBridge;
       this._isInitialized = true;
-      console.log('[Rust] Wasm module initialized');
+      console.log('[Rust] Wasm bridge initialized');
     } catch (err) {
-      console.error('[Rust] Failed to initialize Wasm:', err);
+      console.error('[Rust] Failed to initialize Wasm bridge:', err);
     }
   },
 
@@ -43,21 +45,12 @@ export const RustPlugin = {
       return null;
     }
 
-    const geometryA = meshA.geometry;
-    const geometryB = meshB.geometry;
+    const result = await this._wasmModule.computeBoolean(meshA, meshB, operation);
 
-    // Extract raw buffers
-    const positionsA = geometryA.attributes.position.array;
-    const indicesA = geometryA.index ? geometryA.index.array : null;
-    const positionsB = geometryB.attributes.position.array;
-    const indicesB = geometryB.index ? geometryB.index.array : null;
-
-    // Call Rust Wasm
-    const result = await this._wasmModule.compute_boolean(
-      positionsA, indicesA,
-      positionsB, indicesB,
-      operation // 'union', 'subtract', 'intersect'
-    );
+    if (!result || !result.positions) {
+      console.warn('[Rust] CSG operation returned no result');
+      return null;
+    }
 
     // Rebuild Three.js geometry from Rust output
     const newGeometry = new THREE.BufferGeometry();
@@ -76,13 +69,12 @@ export const RustPlugin = {
   async decimateMesh(mesh, targetPercent) {
     if (!this._isInitialized) return null;
 
-    const geometry = mesh.geometry;
-    const positions = geometry.attributes.position.array;
-    const indices = geometry.index ? geometry.index.array : null;
+    const result = await this._wasmModule.decimateMesh(mesh, targetPercent);
 
-    const result = await this._wasmModule.decimate_mesh(
-      positions, indices, targetPercent
-    );
+    if (!result || !result.positions) {
+      console.warn('[Rust] Decimation returned no result');
+      return null;
+    }
 
     const newGeometry = new THREE.BufferGeometry();
     newGeometry.setAttribute('position', new THREE.Float32BufferAttribute(result.positions, 3));
@@ -100,12 +92,8 @@ export const RustPlugin = {
   async generateBVH(mesh) {
     if (!this._isInitialized) return null;
 
-    const geometry = mesh.geometry;
-    const positions = geometry.attributes.position.array;
-    const indices = geometry.index ? geometry.index.array : null;
+    const bvhData = await this._wasmModule.generateBVH(mesh);
 
-    const bvhData = await this._wasmModule.generate_bvh(positions, indices);
-    
     mesh.userData.bvh = bvhData;
     return bvhData;
   },
@@ -122,7 +110,7 @@ export const RustPlugin = {
       mass: b.mass
     }));
 
-    const updatedBodies = await this._wasmModule.step_physics(bodyData, deltaTime);
+    const updatedBodies = await this._wasmModule.stepPhysics(bodyData, deltaTime);
 
     // Apply results back to Three.js objects
     updatedBodies.forEach((data, i) => {
@@ -148,16 +136,13 @@ export const RustPlugin = {
   nodes: {
     'Rust/BooleanCSGNode': (x, y) => {
       const el = document.createElement('div');
-      el.className = 'shader-node';
+      el.className = 'node-card';
       el.style.left = `${x}px`;
       el.style.top = `${y}px`;
       el.innerHTML = `
         <div class="node-header">🧊 Boolean CSG (Rust)</div>
-        <div class="node-inputs">
-          <span data-type="Mesh" data-prop="meshA">Mesh A</span>
-          <span data-type="Mesh" data-prop="meshB">Mesh B</span>
-        </div>
         <div class="node-body">
+          <p style="font-size:10px;color:#888;margin:4px 0;">Uses first 2 selected meshes</p>
           <label>Operation:</label>
           <select class="node-input" data-prop="operation">
             <option value="union">Union</option>
@@ -165,6 +150,7 @@ export const RustPlugin = {
             <option value="intersect">Intersect</option>
           </select>
         </div>
+        <button class="run-node-btn" data-action="run">Run CSG</button>
         <div class="node-outputs">
           <span data-type="Mesh">Result Mesh</span>
         </div>
@@ -174,18 +160,18 @@ export const RustPlugin = {
 
     'Rust/DecimateNode': (x, y) => {
       const el = document.createElement('div');
-      el.className = 'shader-node';
+      el.className = 'node-card';
       el.style.left = `${x}px`;
       el.style.top = `${y}px`;
       el.innerHTML = `
         <div class="node-header">📉 Decimate Mesh (Rust)</div>
-        <div class="node-inputs">
-          <span data-type="Mesh" data-prop="mesh">Input Mesh</span>
-        </div>
         <div class="node-body">
+          <p style="font-size:10px;color:#888;margin:4px 0;">Uses first selected mesh</p>
           <label>Target %:</label>
           <input type="range" class="node-input" data-prop="percent" min="10" max="100" value="50" />
+          <span class="percent-value" style="font-size:10px;color:#aaa;">50%</span>
         </div>
+        <button class="run-node-btn" data-action="run">Run Decimate</button>
         <div class="node-outputs">
           <span data-type="Mesh">Decimated Mesh</span>
         </div>
@@ -195,14 +181,11 @@ export const RustPlugin = {
 
     'Rust/PhysicsStepNode': (x, y) => {
       const el = document.createElement('div');
-      el.className = 'shader-node';
+      el.className = 'node-card';
       el.style.left = `${x}px`;
       el.style.top = `${y}px`;
       el.innerHTML = `
         <div class="node-header">⚡ Physics Step (Rust)</div>
-        <div class="node-inputs">
-          <span data-type="Array" data-prop="bodies">Rigid Bodies</span>
-        </div>
         <div class="node-body">
           <label>Gravity:</label>
           <input type="number" class="node-input" data-prop="gravity" value="-9.81" step="0.1" />

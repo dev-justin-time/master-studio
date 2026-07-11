@@ -1,3 +1,5 @@
+import * as THREE from 'three';
+
 /**
  * NodeGraphExecutor - Evaluates visual logic graphs (Geometry, Shader, Physics).
  */
@@ -95,11 +97,206 @@ export class NodeGraphExecutor {
   }
 
   _handleGeometryNode(action, inputs) {
-    if (action === 'BooleanCSGNode') {
-      // Handoff to Rust Wasm for heavy CSG math
-      return window.RustGeometryBridge?.computeBoolean(inputs.meshA, inputs.meshB, inputs.operation);
-    }
+    // Heavy geometry operations are executed on-demand via executeNodeOnDemand
+    // to avoid running Wasm inside the 60fps render loop.
     return inputs;
+  }
+
+  // ── On-Demand Node Execution ─────────────────────────────────────────────
+
+  /**
+   * Execute a single node immediately, parsing inputs from its DOM and
+   * falling back to the current selection for missing mesh inputs.
+   */
+  async executeNodeOnDemand(node) {
+    if (!node || !node.dom) {
+      console.warn('[NodeGraphExecutor] Cannot execute invalid node');
+      return null;
+    }
+
+    const parsed = this._parseNodeInputs(node);
+    const [category, action] = node.type.split('/');
+
+    if (category === 'Rust') {
+      return this._executeRustNode(action, parsed);
+    }
+
+    if (category === 'Go') {
+      return this._executeGoNode(action, parsed);
+    }
+
+    console.warn(`[NodeGraphExecutor] On-demand execution not yet implemented for ${node.type}`);
+    return null;
+  }
+
+  _parseNodeInputs(node) {
+    const inputs = {};
+    if (!node.dom) return inputs;
+
+    node.dom.querySelectorAll('[data-prop]').forEach(el => {
+      const prop = el.dataset.prop;
+      let value;
+
+      if (el.tagName === 'INPUT') {
+        if (el.type === 'file') {
+          // Return the file input element itself so callers can read files
+          value = el;
+        } else if (el.type === 'number' || el.type === 'range') {
+          value = parseFloat(el.value);
+        } else if (el.type === 'checkbox') {
+          value = el.checked;
+        } else {
+          value = el.value;
+        }
+      } else if (el.tagName === 'SELECT') {
+        value = el.value;
+      } else {
+        value = el.textContent;
+      }
+
+      inputs[prop] = value;
+    });
+
+    return inputs;
+  }
+
+  async _executeRustNode(action, inputs) {
+    const selection = this.state.data.selectedObjects || [];
+    const rust = this.plugins._plugins.get('Rust');
+
+    if (!rust) {
+      console.warn('[NodeGraphExecutor] RustPlugin not registered');
+      return null;
+    }
+
+    switch (action) {
+      case 'BooleanCSGNode': {
+        const meshA = inputs.meshA || selection[0];
+        const meshB = inputs.meshB || selection[1];
+
+        if (!meshA || !meshB) {
+          console.warn('[NodeGraphExecutor] Boolean CSG requires 2 selected meshes');
+          this._notify('Boolean CSG requires 2 selected meshes', 'warning');
+          return null;
+        }
+
+        const operation = inputs.operation || 'union';
+        const geometry = await rust.booleanCSG(meshA, meshB, operation);
+        if (geometry) {
+          return this._applyGeometryToScene(geometry, meshA, `CSG_${operation}`);
+        }
+        break;
+      }
+
+      case 'DecimateNode': {
+        const mesh = inputs.mesh || selection[0];
+
+        if (!mesh) {
+          console.warn('[NodeGraphExecutor] Decimate requires a selected mesh');
+          this._notify('Decimate requires a selected mesh', 'warning');
+          return null;
+        }
+
+        const percent = typeof inputs.percent === 'number' ? inputs.percent : parseFloat(inputs.percent) || 50;
+        const geometry = await rust.decimateMesh(mesh, percent);
+        if (geometry) {
+          return this._applyGeometryToScene(geometry, mesh, 'Decimated');
+        }
+        break;
+      }
+
+      default:
+        console.warn(`[NodeGraphExecutor] Unknown Rust node action: ${action}`);
+    }
+
+    return null;
+  }
+
+  async _executeGoNode(action, inputs) {
+    const go = this.plugins._plugins.get('Go');
+
+    if (!go) {
+      console.warn('[NodeGraphExecutor] GoPlugin not registered');
+      return null;
+    }
+
+    switch (action) {
+      case 'ParsePointCloudNode': {
+        const fileInput = inputs.file;
+        if (!fileInput || !fileInput.files?.length) {
+          this._notify('Select a point cloud file (.las/.ply)', 'warning');
+          return null;
+        }
+        const buffer = await fileInput.files[0].arrayBuffer();
+        const points = await go.parsePointCloud(buffer);
+        if (points) {
+          this.state.data.scene.add(points);
+          const selection = this.plugins._plugins.get('Selection');
+          selection?._setSelection([points]);
+          this._notify(`Imported ${points.name}`, 'success');
+        }
+        return points;
+      }
+
+      case 'ImportCADNode': {
+        const fileInput = inputs.file;
+        if (!fileInput || !fileInput.files?.length) {
+          this._notify('Select a CAD file (.step/.iges)', 'warning');
+          return null;
+        }
+        const buffer = await fileInput.files[0].arrayBuffer();
+        const group = await go.importCAD(buffer);
+        if (group) {
+          this.state.data.scene.add(group);
+          const selection = this.plugins._plugins.get('Selection');
+          selection?._setSelection([group]);
+          this._notify(`Imported ${group.name}`, 'success');
+        }
+        return group;
+      }
+
+      default:
+        console.warn(`[NodeGraphExecutor] Unknown Go node action: ${action}`);
+    }
+
+    return null;
+  }
+
+  _applyGeometryToScene(geometry, sourceMesh, namePrefix) {
+    if (!geometry || !sourceMesh) return null;
+
+    const material = sourceMesh.material
+      ? (Array.isArray(sourceMesh.material) ? sourceMesh.material[0].clone() : sourceMesh.material.clone())
+      : new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.5, metalness: 0.5 });
+
+    const newMesh = new THREE.Mesh(geometry, material);
+    newMesh.position.copy(sourceMesh.position);
+    newMesh.rotation.copy(sourceMesh.rotation);
+    newMesh.scale.copy(sourceMesh.scale);
+    newMesh.name = `${namePrefix}_${Date.now()}`;
+    newMesh.userData.isManagedObject = true;
+    newMesh.castShadow = true;
+    newMesh.receiveShadow = true;
+
+    this.state.data.scene.add(newMesh);
+
+    // Auto-select the new mesh for the user
+    const selectionPlugin = this.plugins._plugins.get('Selection');
+    if (selectionPlugin && selectionPlugin._setSelection) {
+      selectionPlugin._setSelection([newMesh]);
+    } else {
+      this.state.data.selectedObjects = [newMesh];
+      this.state.set('selectedObjects', [newMesh]);
+      this.state.emit('selection:changed', [newMesh]);
+    }
+
+    this._notify(`Created ${newMesh.name}`, 'success');
+    return newMesh;
+  }
+
+  _notify(message, type = 'info') {
+    this.state.emit('notification', { message, type });
+    console.log(`[NodeGraphExecutor] ${message}`);
   }
 
   _handleLogicNode(action, inputs, dt) {

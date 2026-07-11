@@ -32,18 +32,6 @@ import { GoPlugin } from './plugins/GoPlugin.js';
 import { LuaPlugin } from './plugins/LuaPlugin.js';
 
 export class MasterApp {
-  async init() {
-    // Register language plugins
-    this.plugins.register(RustPlugin);
-    this.plugins.register(GoPlugin);
-    this.plugins.register(LuaPlugin);
-    
-    // Initialize Wasm modules
-    await RustPlugin.init(this.state);
-    await GoPlugin.init(this.state);
-    await LuaPlugin.init(this.state);
-    
-export class MasterApp {
   constructor() {
     // 1. Core Architecture
     this.state = new MasterState();
@@ -144,6 +132,11 @@ export class MasterApp {
     this.plugins.register(LightingPlugin);
     this.plugins.register(PhotorealisticRenderPlugin);
 
+    // Register language/Wasm plugins
+    this.plugins.register(RustPlugin);
+    this.plugins.register(GoPlugin);
+    this.plugins.register(LuaPlugin);
+
     // Setup TransformControls now that renderer/camera exist
     const gizmo = this.plugins._plugins.get('TransformGizmo');
     if (gizmo?.setup) {
@@ -184,6 +177,9 @@ export class MasterApp {
 
     // Wire menu events for selection operations to the Selection plugin
     this._wireMenuEvents();
+
+    // Wire file import (point cloud / CAD) via Go Wasm
+    this._initImportHandlers();
 
     // Initialize Wasm Modules (Rust/Go/Lua)
     await this._initWasmModules();
@@ -297,9 +293,16 @@ export class MasterApp {
 
   async _initWasmModules() {
     console.log('[MasterApp] Initializing WebAssembly modules...');
-    // await import('./wasm/geometry_core_bg.wasm');
-    // await import('./wasm/physics_core_bg.wasm');
-    // await import('./wasm/fengari_lua_bg.wasm');
+    // Initialize language plugin Wasm runtimes (plugins gracefully degrade if Wasm is unavailable)
+    const rust = this.plugins._plugins.get('Rust');
+    const go = this.plugins._plugins.get('Go');
+    const lua = this.plugins._plugins.get('Lua');
+
+    if (rust?.init) await rust.init(this.state);
+    if (go?.init) await go.init(this.state);
+    if (lua?.init) await lua.init(this.state);
+
+    console.log('[MasterApp] Language plugins initialized.');
   }
 
   _initNodeEditorUI() {
@@ -350,6 +353,25 @@ export class MasterApp {
 
     // Add to executor's active graph
     this.nodeGraph.activeGraph.push(nodeData);
+
+    // Wire up on-demand execution buttons (e.g. Rust CSG/Decimate nodes)
+    const runBtn = domElement.querySelector('[data-action="run"]');
+    if (runBtn) {
+      runBtn.addEventListener('click', () => {
+        this.nodeGraph.executeNodeOnDemand(nodeData).catch(err => {
+          console.error('[MasterApp] Node execution failed:', err);
+        });
+      });
+    }
+
+    // Sync range input value display for decimate nodes
+    const rangeInput = domElement.querySelector('input[type="range"][data-prop="percent"]');
+    const percentDisplay = domElement.querySelector('.percent-value');
+    if (rangeInput && percentDisplay) {
+      rangeInput.addEventListener('input', () => {
+        percentDisplay.textContent = `${rangeInput.value}%`;
+      });
+    }
   }
 
   // ── Toolbar Button Handlers ──
@@ -693,6 +715,88 @@ export class MasterApp {
     console.log(`[Demo] Scene initialized with ${colors.length} selectable objects + terrain`);
   }
 
+  // ── File Import (Point Cloud / CAD via Go Wasm) ──
+  _initImportHandlers() {
+    const importInput = document.getElementById('import-file-input');
+    const dropZone = document.getElementById('drop-zone');
+    const viewport = document.getElementById('viewport');
+
+    // Toolbar button opens the hidden file input
+    document.getElementById('btn-import')?.addEventListener('click', () => {
+      importInput?.click();
+    });
+
+    // Handle file selection from the input
+    importInput?.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (file) this._importFile(file);
+      importInput.value = ''; // reset so the same file can be re-selected
+    });
+
+    // Drag & drop over the viewport
+    let dragCounter = 0;
+    viewport?.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      dragCounter++;
+      dropZone?.classList.add('active');
+    });
+    viewport?.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dragCounter--;
+      if (dragCounter <= 0) {
+        dropZone?.classList.remove('active');
+        dragCounter = 0;
+      }
+    });
+    viewport?.addEventListener('dragover', (e) => {
+      e.preventDefault();
+    });
+    viewport?.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dragCounter = 0;
+      dropZone?.classList.remove('active');
+
+      const file = e.dataTransfer?.files?.[0];
+      if (file) this._importFile(file);
+    });
+  }
+
+  async _importFile(file) {
+    const go = this.plugins._plugins.get('Go');
+    if (!go) {
+      console.warn('[MasterApp] GoPlugin not registered');
+      return;
+    }
+
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    const buffer = await file.arrayBuffer();
+
+    let object = null;
+    if (['las', 'ply'].includes(ext)) {
+      object = await go.parsePointCloud(buffer);
+    } else if (['step', 'iges', 'stp', 'igs'].includes(ext)) {
+      object = await go.importCAD(buffer);
+    } else {
+      console.warn('[MasterApp] Unsupported import format:', ext);
+      return;
+    }
+
+    if (!object) {
+      console.warn('[MasterApp] Import returned no result for', file.name);
+      return;
+    }
+
+    // Center the imported object in the scene
+    object.position.set(0, 0, 0);
+    this.scene.add(object);
+
+    // Select the imported object
+    const selection = this.plugins._plugins.get('Selection');
+    selection?._setSelection([object]);
+
+    console.log('[MasterApp] Imported', file.name, '→', object.name);
+  }
+
   // ── Menu Event Wiring (CustomEvent → plugin methods) ──
   _wireMenuEvents() {
     const selection = this.plugins._plugins.get('Selection');
@@ -848,4 +952,4 @@ export class MasterApp {
 
 // ── Bootstrap ──
 const app = new MasterApp();
-app.init().catch(console.error)}}
+app.init().catch(console.error);

@@ -2,6 +2,9 @@
  * GoPlugin - Concurrent asset processing via Go WebAssembly.
  * Handles point cloud parsing, CAD import, and background tasks.
  */
+import * as THREE from 'three';
+import { GoAssetBridge } from '../bindings/WasmBridge.js';
+
 export const GoPlugin = {
   name: 'Go',
   _state: null,
@@ -12,23 +15,23 @@ export const GoPlugin = {
 
   async init(state) {
     this._state = state;
-    
-    // Initialize Go Wasm module
+
+    // Initialize Go Wasm module via the shared bridge
     await this._initWasm();
-    
+
     // Create worker pool for concurrent processing
     this._initWorkerPool();
   },
 
   async _initWasm() {
     try {
-      // In production, this imports the compiled Go Wasm
-      // const wasm = await import('../wasm/go_engine_bg.wasm');
-      // this._wasmModule = wasm;
+      // GoAssetBridge is initialized by bindings/WasmBridge.js and
+      // gracefully degrades if the Go Wasm binary is unavailable.
+      this._wasmModule = GoAssetBridge;
       this._isInitialized = true;
-      console.log('[Go] Wasm module initialized');
+      console.log('[Go] Wasm bridge initialized');
     } catch (err) {
-      console.error('[Go] Failed to initialize Wasm:', err);
+      console.error('[Go] Failed to initialize Wasm bridge:', err);
     }
   },
 
@@ -59,25 +62,31 @@ export const GoPlugin = {
     }
 
     worker.busy = true;
-    
+
     try {
-      const result = await this._wasmModule.parse_point_cloud(fileBuffer);
-      
+      const result = await this._wasmModule.parsePointCloud(fileBuffer);
+
+      if (!result || !result.positions) {
+        console.warn('[Go] Point cloud parsing returned no result');
+        return null;
+      }
+
       // Convert to Three.js Points
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute('position', new THREE.Float32BufferAttribute(result.positions, 3));
       if (result.colors) {
         geometry.setAttribute('color', new THREE.Float32BufferAttribute(result.colors, 3));
       }
-      
+
       const material = new THREE.PointsMaterial({
         size: 0.1,
         vertexColors: !!result.colors
       });
-      
+
       const points = new THREE.Points(geometry, material);
-      points.name = 'PointCloud';
-      
+      points.name = 'PointCloud_' + Date.now();
+      points.userData.isManagedObject = true;
+
       return points;
     } finally {
       worker.busy = false;
@@ -94,30 +103,37 @@ export const GoPlugin = {
     if (!worker) return null;
 
     worker.busy = true;
-    
+
     try {
-      const result = await this._wasmModule.import_cad(fileBuffer);
-      
+      const result = await this._wasmModule.importCAD(fileBuffer);
+
+      if (!result || !result.meshes) {
+        console.warn('[Go] CAD import returned no result');
+        return null;
+      }
+
       const group = new THREE.Group();
-      group.name = 'CAD_Model';
-      
+      group.name = 'CAD_Model_' + Date.now();
+      group.userData.isManagedObject = true;
+
       result.meshes.forEach((meshData, i) => {
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.Float32BufferAttribute(meshData.positions, 3));
         geometry.setIndex(new THREE.BufferAttribute(meshData.indices, 1));
         geometry.computeVertexNormals();
-        
+
         const material = new THREE.MeshStandardMaterial({
           color: 0xcccccc,
           metalness: 0.5,
           roughness: 0.5
         });
-        
+
         const mesh = new THREE.Mesh(geometry, material);
         mesh.name = `CAD_Part_${i}`;
+        mesh.userData.isManagedObject = true;
         group.add(mesh);
       });
-      
+
       return group;
     } finally {
       worker.busy = false;
@@ -137,7 +153,7 @@ export const GoPlugin = {
       const start = i * chunkSize;
       const end = Math.min(start + chunkSize, fileBuffer.byteLength);
       const chunk = fileBuffer.slice(start, end);
-      
+
       promises.push(
         this._processChunk(chunk, i, processFn)
       );
@@ -151,7 +167,7 @@ export const GoPlugin = {
     if (!worker) return;
 
     worker.busy = true;
-    
+
     try {
       const result = await processFn(chunk, index);
       return result;
@@ -177,7 +193,7 @@ export const GoPlugin = {
   nodes: {
     'Go/ParsePointCloudNode': (x, y) => {
       const el = document.createElement('div');
-      el.className = 'shader-node';
+      el.className = 'node-card';
       el.style.left = `${x}px`;
       el.style.top = `${y}px`;
       el.innerHTML = `
@@ -187,6 +203,7 @@ export const GoPlugin = {
           <label>Point Size:</label>
           <input type="number" class="node-input" data-prop="size" value="0.1" step="0.01" />
         </div>
+        <button class="run-node-btn" data-action="run">Parse Point Cloud</button>
         <div class="node-outputs">
           <span data-type="Points">Point Cloud</span>
         </div>
@@ -196,7 +213,7 @@ export const GoPlugin = {
 
     'Go/ImportCADNode': (x, y) => {
       const el = document.createElement('div');
-      el.className = 'shader-node';
+      el.className = 'node-card';
       el.style.left = `${x}px`;
       el.style.top = `${y}px`;
       el.innerHTML = `
@@ -206,6 +223,7 @@ export const GoPlugin = {
           <label>Tolerance:</label>
           <input type="number" class="node-input" data-prop="tolerance" value="0.001" step="0.0001" />
         </div>
+        <button class="run-node-btn" data-action="run">Import CAD</button>
         <div class="node-outputs">
           <span data-type="Group">CAD Model</span>
         </div>
@@ -215,7 +233,7 @@ export const GoPlugin = {
 
     'Go/WorkerStatusNode': (x, y) => {
       const el = document.createElement('div');
-      el.className = 'shader-node';
+      el.className = 'node-card';
       el.style.left = `${x}px`;
       el.style.top = `${y}px`;
       el.innerHTML = `

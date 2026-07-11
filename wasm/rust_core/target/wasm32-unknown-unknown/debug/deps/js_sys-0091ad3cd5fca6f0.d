@@ -1,0 +1,10 @@
+C:\Users\dividicus\Desktop\master studio\wasm\rust_core\target\wasm32-unknown-unknown\debug\deps\js_sys-0091ad3cd5fca6f0.d: C:\Users\dividicus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\js-sys-0.3.103\src\lib.rs C:\Users\dividicus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\js-sys-0.3.103\src\futures\mod.rs C:\Users\dividicus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\js-sys-0.3.103\src\futures\queue.rs C:\Users\dividicus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\js-sys-0.3.103\src\futures\task\singlethread.rs
+
+C:\Users\dividicus\Desktop\master studio\wasm\rust_core\target\wasm32-unknown-unknown\debug\deps\libjs_sys-0091ad3cd5fca6f0.rlib: C:\Users\dividicus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\js-sys-0.3.103\src\lib.rs C:\Users\dividicus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\js-sys-0.3.103\src\futures\mod.rs C:\Users\dividicus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\js-sys-0.3.103\src\futures\queue.rs C:\Users\dividicus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\js-sys-0.3.103\src\futures\task\singlethread.rs
+
+C:\Users\dividicus\Desktop\master studio\wasm\rust_core\target\wasm32-unknown-unknown\debug\deps\libjs_sys-0091ad3cd5fca6f0.rmeta: C:\Users\dividicus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\js-sys-0.3.103\src\lib.rs C:\Users\dividicus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\js-sys-0.3.103\src\futures\mod.rs C:\Users\dividicus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\js-sys-0.3.103\src\futures\queue.rs C:\Users\dividicus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\js-sys-0.3.103\src\futures\task\singlethread.rs
+
+C:\Users\dividicus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\js-sys-0.3.103\src\lib.rs:
+C:\Users\dividicus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\js-sys-0.3.103\src\futures\mod.rs:
+C:\Users\dividicus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\js-sys-0.3.103\src\futures\queue.rs:
+C:\Users\dividicus\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\js-sys-0.3.103\src\futures\task\singlethread.rs:
