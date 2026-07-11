@@ -163,7 +163,7 @@
       <canvas id="renderCanvas"></canvas>
       <canvas id="lassoOverlay" style="position:absolute;top:0;left:0;width:100%;height:100%;display:none;pointer-events:none;z-index:10;"></canvas>
       <div id="controls-hint" style="position:absolute;bottom:12px;left:12px;font-size:11px;color:#555;font-family:monospace;pointer-events:none;z-index:5;">
-        <b>L</b> Lasso &nbsp; <b>G</b> Group &nbsp; <b>U</b> Ungroup &nbsp; <b>S</b> Sticky &nbsp; <b>P</b> Debug &nbsp; <b>1-3</b> Color Select
+        <b>G</b> Move &nbsp; <b>R</b> Rotate &nbsp; <b>S</b> Scale &nbsp; <b>L</b> Lasso &nbsp; <b>T</b> Sticky &nbsp; <b>P</b> Debug &nbsp; <b>1-3</b> Color Select
       </div>
     </div>
 
@@ -185,6 +185,9 @@
         <button id="btn-select-all" title="Select all objects (Ctrl+A)">Select All</button>
         <button id="btn-deselect" title="Deselect all (Esc)">Deselect</button>
         <button id="btn-lasso" title="Toggle lasso selection (L)">🎯 Lasso</button>
+        <button id="btn-translate" title="Translate mode (G)">↔ Move</button>
+        <button id="btn-rotate" title="Rotate mode (R)">↻ Rotate</button>
+        <button id="btn-scale" title="Scale mode (S)">⤢ Scale</button>
         <span id="sticky-indicator" style="font-size:10px;color:#888;padding:6px;align-self:center;">Sticky: OFF</span>
         <button id="btn-debug" title="Toggle physics debug overlay (P)">🐛 Debug</button>
       </div>

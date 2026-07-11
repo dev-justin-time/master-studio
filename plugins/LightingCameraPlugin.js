@@ -136,7 +136,8 @@ export const LightingCameraPlugin = {
    * (which has the full light management system).
    */
   applyLightingPreset(presetName) {
-    const lighting = this._state.data._plugins?.get?.('Lighting');
+    const pluginManager = this._state.data.pluginManager;
+    const lighting = pluginManager?._plugins?.get('Lighting');
     if (lighting?.applyPreset) {
       lighting.applyPreset(presetName);
       console.log(`[LightingCamera] Lighting preset → ${presetName}`);

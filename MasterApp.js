@@ -26,7 +26,23 @@ import { MenuSystemPlugin } from './plugins/MenuSystemPlugin.js';
 import { LightingCameraPlugin } from './plugins/LightingCameraPlugin.js';
 import { LightingPlugin } from './plugins/LightingPlugin.js';
 import { PhotorealisticRenderPlugin } from './plugins/PhotorealisticRenderPlugin.js';
+import { TransformGizmoPlugin } from './plugins/TransformGizmoPlugin.js';
+import { RustPlugin } from './plugins/RustPlugin.js';
+import { GoPlugin } from './plugins/GoPlugin.js';
+import { LuaPlugin } from './plugins/LuaPlugin.js';
 
+export class MasterApp {
+  async init() {
+    // Register language plugins
+    this.plugins.register(RustPlugin);
+    this.plugins.register(GoPlugin);
+    this.plugins.register(LuaPlugin);
+    
+    // Initialize Wasm modules
+    await RustPlugin.init(this.state);
+    await GoPlugin.init(this.state);
+    await LuaPlugin.init(this.state);
+    
 export class MasterApp {
   constructor() {
     // 1. Core Architecture
@@ -54,6 +70,7 @@ export class MasterApp {
     this.state.set('scene', this.scene);
     this.state.set('camera', this.camera);
     this.state.set('renderer', null); // populated in _initRenderer
+    this.state.set('pluginManager', this.plugins); // for cross-plugin access (e.g. LightingCameraPlugin → LightingPlugin)
   }
 
   async init() {
@@ -114,6 +131,7 @@ export class MasterApp {
 
     this.plugins.register(MenuSystemPlugin);
     this.plugins.register(LightingCameraPlugin);
+    this.plugins.register(TransformGizmoPlugin);
 
     this.plugins.register(RiggingPlugin);
     this.plugins.register(AnimationPlugin);
@@ -125,6 +143,12 @@ export class MasterApp {
 
     this.plugins.register(LightingPlugin);
     this.plugins.register(PhotorealisticRenderPlugin);
+
+    // Setup TransformControls now that renderer/camera exist
+    const gizmo = this.plugins._plugins.get('TransformGizmo');
+    if (gizmo?.setup) {
+      gizmo.setup(this.camera, this.renderer, this.controls, this.scene);
+    }
 
     // Use PhotorealisticRender's composer (SSAO, Bloom, FXAA) as primary pipeline
     const prPlugin = this.plugins._plugins.get('PhotorealisticRender');
@@ -400,6 +424,28 @@ export class MasterApp {
       this._togglePhysicsDebug();
     });
 
+    // Gizmo mode toolbar buttons
+    const gizmoPlugin = this.plugins._plugins.get('TransformGizmo');
+    document.getElementById('btn-translate')?.addEventListener('click', () => {
+      gizmoPlugin?.setMode('translate');
+    });
+    document.getElementById('btn-rotate')?.addEventListener('click', () => {
+      gizmoPlugin?.setMode('rotate');
+    });
+    document.getElementById('btn-scale')?.addEventListener('click', () => {
+      gizmoPlugin?.setMode('scale');
+    });
+
+    // Listen to gizmo mode changes to update toolbar active states
+    this.state.on('gizmo:mode:changed', ({ mode }) => {
+      ['translate', 'rotate', 'scale'].forEach(m => {
+        const btn = document.getElementById(`btn-${m}`);
+        if (btn) {
+          btn.classList.toggle('active', m === mode);
+        }
+      });
+    });
+
     this.state.on('physics:debug:toggled', (enabled) => {
       const btn = document.getElementById('btn-debug');
       if (btn) {
@@ -412,6 +458,7 @@ export class MasterApp {
   // ── Keyboard Shortcuts ──
   _initKeybindings() {
     const selection = this.plugins._plugins.get('Selection');
+    const gizmo = this.plugins._plugins.get('TransformGizmo');
 
     window.addEventListener('keydown', (e) => {
       // Ignore when typing in inputs
@@ -429,17 +476,26 @@ export class MasterApp {
           selection?.deselectAll();
           break;
         case key === 'g' && !ctrl:
-          selection?.groupSelected();
+          e.preventDefault();
+          gizmo?.setMode('translate');
+          break;
+        case key === 'r' && !ctrl:
+          e.preventDefault();
+          gizmo?.setMode('rotate');
+          break;
+        case key === 's' && !ctrl:
+          e.preventDefault();
+          gizmo?.setMode('scale');
+          break;
+        case key === 't' && !ctrl:
+          e.preventDefault();
+          selection?.toggleStickySelect();
           break;
         case key === 'u' && !ctrl:
           selection?.ungroupSelected();
           break;
         case key === 'i' && !ctrl:
           selection?.invertSelection();
-          break;
-        case key === 's' && !ctrl:
-          e.preventDefault();
-          selection?.toggleStickySelect();
           break;
         case key === 'l' && !ctrl:
           if (selection?._isLassoActive) {
@@ -687,11 +743,13 @@ export class MasterApp {
       selection?._setSelection([mesh]);
     });
 
-    // Delete selected
+    // Delete selected (also remove physics bodies)
     window.addEventListener('delete', () => {
       const sel = this.state.data.selectedObjects;
       if (sel?.length) {
+        const bodies = this.state.data.physicsBodies;
         sel.forEach(obj => {
+          if (bodies) bodies.delete(obj.uuid);
           this.scene.remove(obj);
         });
         selection?._setSelection([]);
@@ -796,4 +854,4 @@ export class MasterApp {
 
 // ── Bootstrap ──
 const app = new MasterApp();
-app.init().catch(console.error);
+app.init().catch(console.error)}}
