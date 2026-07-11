@@ -20,6 +20,12 @@ import { ProceduralPlugin } from './plugins/ProceduralPlugin.js';
 import { AIBehaviorPlugin } from './plugins/AIBehaviorPlugin.js';
 import { GameMapPlugin } from './plugins/GameMapPlugin.js';
 import { SelectionPlugin } from './plugins/SelectionPlugin.js';
+import { StateManagerPlugin } from './plugins/StateManagerPlugin.js';
+import { AIAgentPlugin } from './plugins/AIAgentPlugin.js';
+import { MenuSystemPlugin } from './plugins/MenuSystemPlugin.js';
+import { LightingCameraPlugin } from './plugins/LightingCameraPlugin.js';
+import { LightingPlugin } from './plugins/LightingPlugin.js';
+import { PhotorealisticRenderPlugin } from './plugins/PhotorealisticRenderPlugin.js';
 
 export class MasterApp {
   constructor() {
@@ -47,6 +53,7 @@ export class MasterApp {
     // 3. State Initialization
     this.state.set('scene', this.scene);
     this.state.set('camera', this.camera);
+    this.state.set('renderer', null); // populated in _initRenderer
   }
 
   async init() {
@@ -55,6 +62,59 @@ export class MasterApp {
     this._initPostProcessing();
 
     // Register Plugins
+    this.plugins.register(StateManagerPlugin);
+    this.plugins.register(AIAgentPlugin);
+    // AIAgent needs the StateManager plugin instance, not MasterState
+    const stateMgr = this.plugins._plugins.get('StateManager');
+    this.plugins._plugins.get('AIAgents').init(stateMgr);
+
+    // Subscribe to self-optimizing actions from AI experts
+    stateMgr.subscribe('render.outlinePass', (enabled) => {
+      if (this._outlinePass) {
+        this._outlinePass.enabled = enabled;
+        console.log('[AI Optimize] Outline pass:', enabled ? 'ON' : 'OFF');
+      }
+    });
+
+    stateMgr.subscribe('physics.substeps', (substeps) => {
+      const physics = this.plugins._plugins.get('PhysicsPlugin');
+      if (physics && substeps > 0) {
+        physics._timeStep = 1 / substeps;
+        console.log('[AI Optimize] Physics substeps:', substeps, '→ timestep:', physics._timeStep.toFixed(4));
+      }
+    });
+
+    stateMgr.subscribe('memory.gc', (timestamp) => {
+      console.log('[AI Optimize] Memory GC triggered at', timestamp);
+      // Reset renderer info counters to free tracked memory
+      if (this.renderer) {
+        this.renderer.info.reset();
+      }
+    });
+
+    // Toggle debug panel
+    let debugOpen = false;
+    document.getElementById('state-debug-toggle')?.addEventListener('click', () => {
+      debugOpen = !debugOpen;
+      const body = document.getElementById('state-debug-body');
+      const toggle = document.getElementById('state-debug-toggle');
+      if (body) body.style.display = debugOpen ? 'block' : 'none';
+      if (toggle) toggle.textContent = debugOpen ? '▾ State Debug' : '▸ State Debug';
+    });
+
+    // Wire sidebar/debug panel toggle from menu
+    window.addEventListener('togglePanel', (e) => {
+      if (e.detail.panel === 'sidebar') {
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar) sidebar.style.display = sidebar.style.display === 'none' ? '' : 'none';
+      } else if (e.detail.panel === 'debug') {
+        document.getElementById('state-debug-toggle')?.click();
+      }
+    });
+
+    this.plugins.register(MenuSystemPlugin);
+    this.plugins.register(LightingCameraPlugin);
+
     this.plugins.register(RiggingPlugin);
     this.plugins.register(AnimationPlugin);
     this.plugins.register(PhysicsPlugin);
@@ -63,10 +123,43 @@ export class MasterApp {
     this.plugins.register(GameMapPlugin);
     this.plugins.register(SelectionPlugin);
 
+    this.plugins.register(LightingPlugin);
+    this.plugins.register(PhotorealisticRenderPlugin);
+
+    // Use PhotorealisticRender's composer (SSAO, Bloom, FXAA) as primary pipeline
+    const prPlugin = this.plugins._plugins.get('PhotorealisticRender');
+    if (prPlugin?.composer) {
+      // Inject OutlinePass into the photorealistic pipeline (after all passes, so outline stays sharp)
+      prPlugin.composer.addPass(this._outlinePass);
+      this.composer = prPlugin.composer;
+      console.log('[MasterApp] Swapped to PhotorealisticRender pipeline.');
+    }
+
+    // Wire menu render-preset & screenshot events to PhotorealisticRender
+    window.addEventListener('setRenderPreset', (e) => {
+      const pr = this.plugins._plugins.get('PhotorealisticRender');
+      pr?.applyPreset(e.detail.preset);
+    });
+    window.addEventListener('captureScreenshot', async () => {
+      const pr = this.plugins._plugins.get('PhotorealisticRender');
+      if (pr?.captureScreenshot) {
+        const url = await pr.captureScreenshot();
+        if (url) {
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `screenshot-${Date.now()}.png`;
+          a.click();
+        }
+      }
+    });
+
     this._initNodeEditorUI();
     this._initToolbarButtons();
     this._initKeybindings();
     this._initDemoScene();
+
+    // Wire menu events for selection operations to the Selection plugin
+    this._wireMenuEvents();
 
     // Initialize Wasm Modules (Rust/Go/Lua)
     await this._initWasmModules();
@@ -82,9 +175,13 @@ export class MasterApp {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.state.set('renderer', this.renderer);
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
+    this.state.set('controls', this.controls);
 
     window.addEventListener('resize', () => {
       this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -546,16 +643,142 @@ export class MasterApp {
     console.log(`[Demo] Scene initialized with ${colors.length} selectable objects + terrain`);
   }
 
+  // ── Menu Event Wiring (CustomEvent → plugin methods) ──
+  _wireMenuEvents() {
+    const selection = this.plugins._plugins.get('Selection');
+
+    // Selection operations
+    window.addEventListener('selectAll', () => selection?.selectAll());
+    window.addEventListener('deselectAll', () => selection?.deselectAll());
+    window.addEventListener('invertSelection', () => selection?.invertSelection());
+    window.addEventListener('group', () => selection?.groupSelected());
+    window.addEventListener('ungroup', () => selection?.ungroupSelected());
+
+    // Primitives: spawn via the same logic as btn-add-cube
+    window.addEventListener('addPrimitive', (e) => {
+      const physics = this.plugins._plugins.get('PhysicsPlugin');
+      const type = e.detail.type;
+      let geo;
+      switch (type) {
+        case 'cube':      geo = new THREE.BoxGeometry(0.8, 0.8, 0.8); break;
+        case 'uvsphere':  geo = new THREE.SphereGeometry(0.45, 32, 32); break;
+        case 'icosphere': geo = new THREE.IcosahedronGeometry(0.45); break;
+        case 'cone':      geo = new THREE.ConeGeometry(0.45, 0.9, 24); break;
+        case 'cylinder':  geo = new THREE.CylinderGeometry(0.4, 0.4, 0.9, 24); break;
+        case 'torus':     geo = new THREE.TorusGeometry(0.4, 0.15, 16, 32); break;
+        case 'plane':     geo = new THREE.PlaneGeometry(1.2, 1.2); break;
+        default:          geo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+      }
+      const mat = new THREE.MeshStandardMaterial({
+        color: Math.random() * 0xffffff,
+        roughness: 0.4,
+        metalness: 0.3
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.name = `${type}_${Date.now()}`;
+      mesh.position.set(
+        (Math.random() - 0.5) * 6,
+        2 + Math.random() * 2,
+        (Math.random() - 0.5) * 6
+      );
+      mesh.userData.isManagedObject = true;
+      this.scene.add(mesh);
+      physics?.createRigidBody(mesh.name, mesh, { mass: 1 });
+      selection?._setSelection([mesh]);
+    });
+
+    // Delete selected
+    window.addEventListener('delete', () => {
+      const sel = this.state.data.selectedObjects;
+      if (sel?.length) {
+        sel.forEach(obj => {
+          this.scene.remove(obj);
+        });
+        selection?._setSelection([]);
+      }
+    });
+
+    // Duplicate selected
+    window.addEventListener('duplicate', () => {
+      const sel = this.state.data.selectedObjects;
+      if (!sel?.length) return;
+      const physics = this.plugins._plugins.get('PhysicsPlugin');
+      const newSelection = [];
+      sel.forEach(obj => {
+        const clone = obj.clone(true);
+        clone.name = obj.name + '_copy';
+        clone.position.x += 1.5;
+        clone.userData.isManagedObject = true;
+        this.scene.add(clone);
+        physics?.createRigidBody(clone.name, clone, { mass: 1 });
+        newSelection.push(clone);
+      });
+      selection?._setSelection(newSelection);
+    });
+  }
+
+  // ── Debug Panel Update (throttled to ~1/sec) ──
+  _updateDebugPanel(deltaTime) {
+    if (this._debugPanelAcc === undefined) this._debugPanelAcc = 0;
+    this._debugPanelAcc += deltaTime;
+    if (this._debugPanelAcc < 1.0) return;
+    this._debugPanelAcc = 0;
+
+    const stateMgr = this.plugins._plugins.get('StateManager');
+    if (!stateMgr) return;
+
+    const fps = stateMgr.getState('performance.fps');
+    const frameTime = stateMgr.getState('performance.frameTime');
+    const mem = stateMgr.getState('performance.memoryMB');
+    const outline = stateMgr.getState('render.outlinePass');
+    const substeps = stateMgr.getState('physics.substeps');
+
+    const aiAgent = this.plugins._plugins.get('AIAgents');
+    const bufSize = aiAgent?._telemetryBuffer?.length ?? 0;
+    const expertCount = aiAgent?._experts?.size ?? 0;
+
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    set('dbg-fps', fps?.toFixed(0) ?? '--');
+    set('dbg-frame', frameTime?.toFixed(1) ?? '--');
+    set('dbg-mem', mem?.toFixed(0) ?? '--');
+    set('dbg-outline', outline ? 'ON' : 'OFF');
+    set('dbg-substeps', substeps ?? '--');
+    set('dbg-mw', stateMgr._middleware.length);
+    set('dbg-buf', bufSize);
+    set('dbg-experts', expertCount);
+    set('dbg-listeners', stateMgr._listeners.size);
+  }
+
   _animate() {
     requestAnimationFrame(() => this._animate());
 
     const deltaTime = this.clock.getDelta();
 
+    // 0. Dispatch FPS telemetry to StateManager for AI experts
+    const fps = deltaTime > 0 ? 1 / deltaTime : 60;
+    const stateMgr = this.plugins._plugins.get('StateManager');
+    if (stateMgr) {
+      stateMgr.dispatch({ type: 'PERF/UPDATE_FPS', payload: fps, path: 'performance.fps' });
+      stateMgr.dispatch({ type: 'PERF/UPDATE_FRAME_TIME', payload: deltaTime * 1000, path: 'performance.frameTime' });
+      if (performance.memory) {
+        stateMgr.dispatch({ type: 'PERF/UPDATE_MEMORY', payload: performance.memory.usedJSHeapSize / 1048576, path: 'performance.memoryMB' });
+      }
+      // Feed physics step time so PhysicsExpert can recommend substep adjustments
+      const physics = this.plugins._plugins.get('PhysicsPlugin');
+      const physStepMS = physics?._timeStep ? physics._timeStep * 1000 : 0.5;
+      stateMgr.dispatch({ type: 'PHYSICS/STEP_TIME', payload: physStepMS, path: 'physics.stepTimeMS' });
+    }
+
     // 1. Update Controls
     this.controls.update();
 
     // 2. Evaluate Visual Node Graph (Triggers Rust/Go/Lua logic)
+    const nodeEvalStart = performance.now();
     this.nodeGraph.evaluate(deltaTime);
+    const nodeEvalMS = performance.now() - nodeEvalStart;
+    if (stateMgr) {
+      stateMgr.dispatch({ type: 'NODE_GRAPH/EVAL_TIME', payload: nodeEvalMS, path: 'nodeGraph.evalTimeMS' });
+    }
 
     // 3. Update Independent Plugins (Animation mixers, Physics steps)
     this.plugins.update(deltaTime);
@@ -565,6 +788,9 @@ export class MasterApp {
 
     // 5. Render
     this.composer.render();
+
+    // 6. Update StateManager debug panel (once per second)
+    this._updateDebugPanel(deltaTime);
   }
 }
 
