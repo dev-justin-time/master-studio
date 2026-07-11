@@ -319,6 +319,7 @@ export const SelectionPlugin = {
     this._state.set('selectedObjects', objects);
     this._state.set('selectedObject', objects.length === 1 ? objects[0] : null);
     this._selectionHistory.push([...objects]);
+    this._state.emit('selection:changed', objects);
   },
 
   _addToSelection(objects) {
@@ -341,9 +342,11 @@ export const SelectionPlugin = {
     object.getWorldPosition(vector);
     vector.project(camera);
 
+    const vw = this._viewport?.clientWidth ?? window.innerWidth;
+    const vh = this._viewport?.clientHeight ?? window.innerHeight;
     return {
-      x: (vector.x + 1) / 2 * window.innerWidth,
-      y: (-vector.y + 1) / 2 * window.innerHeight
+      x: (vector.x + 1) / 2 * vw,
+      y: (-vector.y + 1) / 2 * vh
     };
   },
 

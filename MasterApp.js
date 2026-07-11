@@ -36,6 +36,7 @@ export class MasterApp {
 
     this.renderer = null;
     this.composer = null;
+    this._outlinePass = null;
     this.controls = null;
     this.clock = new THREE.Clock();
 
@@ -90,6 +91,7 @@ export class MasterApp {
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(window.innerWidth, window.innerHeight);
       this.composer.setSize(window.innerWidth, window.innerHeight);
+      this._outlinePass?.setSize(window.innerWidth, window.innerHeight);
     });
   }
 
@@ -105,10 +107,71 @@ export class MasterApp {
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
 
-    const outlinePass = new OutlinePass(new THREE.Vector2(window.innerWidth, window.innerHeight), this.scene, this.camera);
-    outlinePass.edgeStrength = 3;
-    outlinePass.visibleEdgeColor.set('#00ff00');
-    this.composer.addPass(outlinePass);
+    this._outlinePass = new OutlinePass(new THREE.Vector2(window.innerWidth, window.innerHeight), this.scene, this.camera);
+    this._outlinePass.edgeStrength = 3;
+    this._outlinePass.visibleEdgeColor.set('#00ff00');
+    this._outlinePass.edgeGlow = 1;
+    this._outlinePass.pulsePeriod = 2;
+    this.composer.addPass(this._outlinePass);
+
+    // Wire up selection highlighting (traverse groups to highlight child meshes)
+    this.state.on('selection:changed', (objects) => {
+      const meshes = [];
+      objects.forEach(obj => {
+        if (obj.isMesh) {
+          meshes.push(obj);
+        } else if (obj.isGroup) {
+          obj.traverse(child => {
+            if (child.isMesh) meshes.push(child);
+          });
+        }
+      });
+      this._outlinePass.selectedObjects = meshes;
+    });
+
+    // Click-to-select via raycasting (with drag threshold to avoid orbit interference)
+    this._raycaster = new THREE.Raycaster();
+    this._mouse = new THREE.Vector2();
+    let mouseDownX = 0, mouseDownY = 0;
+
+    this.renderer.domElement.addEventListener('mousedown', (e) => {
+      mouseDownX = e.clientX;
+      mouseDownY = e.clientY;
+    });
+
+    this.renderer.domElement.addEventListener('mouseup', (e) => {
+      const selection = this.plugins._plugins.get('Selection');
+      if (selection?._isLassoActive) return;
+
+      // Only treat as a click if the mouse barely moved (≤ 3px)
+      const dx = e.clientX - mouseDownX;
+      const dy = e.clientY - mouseDownY;
+      if (Math.sqrt(dx * dx + dy * dy) > 3) return;
+
+      this._mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+      this._mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+      this._raycaster.setFromCamera(this._mouse, this.camera);
+      const targets = [];
+      this.scene.traverse(obj => {
+        if (obj.isMesh && obj.userData.isManagedObject) targets.push(obj);
+      });
+
+      const hits = this._raycaster.intersectObjects(targets, false);
+      if (hits.length > 0) {
+        const hitObj = hits[0].object;
+        if (selection?._stickySelect) {
+          const current = this.state.data.selectedObjects || [];
+          if (current.includes(hitObj)) {
+            selection._setSelection(current.filter(o => o !== hitObj));
+          } else {
+            selection._setSelection([...current, hitObj]);
+          }
+        } else {
+          selection?._setSelection([hitObj]);
+        }
+      }
+    });
   }
 
   async _initWasmModules() {
