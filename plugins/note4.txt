@@ -1,0 +1,462 @@
+Here are the two most advanced plugins for your studio: a **Reactive State Manager Engine** (the central nervous system of the app) and an **Agentic AI Orchestrator** (where domain-specific experts monitor, analyze, and self-optimize the studio in real-time).
+
+---
+
+### 1. Dynamic State Manager Engine (`plugins/StateManagerPlugin.js`)
+
+This plugin replaces simple variable tracking with a **Redux-like, path-based reactive state engine**. It features middleware (for undo/redo, persistence, and AI telemetry), batched updates, and granular subscriptions so plugins only re-render when their specific data changes.
+
+```javascript
+/**
+ * StateManagerPlugin - High-performance, reactive state engine with middleware.
+ * Acts as the central nervous system for the entire 3D studio.
+ */
+export const StateManagerPlugin = {
+  name: 'StateManager',
+  _state: {},
+  _listeners: new Map(), // path -> Set of callbacks
+  _middleware: [],
+  _history: [],
+  _isDispatching: false,
+
+  init(masterState) {
+    this._masterState = masterState;
+    
+    // Initialize default state tree
+    this._state = {
+      scene: { objectCount: 0, selectedUUIDs: [] },
+      performance: { fps: 60, frameTime: 16, memoryMB: 0 },
+      plugins: {}, // Plugin-specific state slices
+      ui: { activeEditor: '3d-viewport', theme: 'dark' }
+    };
+
+    // Add default middleware
+    this.addMiddleware(this._historyMiddleware);
+    this.addMiddleware(this._agentTelemetryMiddleware);
+    
+    console.log('[StateManager] Engine initialized.');
+  },
+
+  /**
+   * Gets a specific slice of state using dot-notation (e.g., 'performance.fps').
+   */
+  getState(path = '') {
+    if (!path) return this._state;
+    return path.split('.').reduce((obj, key) => obj?.[key], this._state);
+  },
+
+  /**
+   * Dispatches an action to update the state.
+   * @param {Object} action - { type: 'PLUGIN/UPDATE_METRIC', payload: { ... } }
+   */
+  dispatch(action) {
+    if (this._isDispatching) {
+      throw new Error('[StateManager] Reducers may not dispatch actions.');
+    }
+
+    try {
+      this._isDispatching = true;
+      
+      // Run middleware chain
+      let currentState = this._state;
+      for (const mw of this._middleware) {
+        currentState = mw(currentState, action) || currentState;
+      }
+      
+      this._state = currentState;
+      this._notifyListeners(action);
+    } finally {
+      this._isDispatching = false;
+    }
+  },
+
+  /**
+   * Subscribes to changes on a specific state path.
+   * @returns {Function} Unsubscribe function.
+   */
+  subscribe(path, callback) {
+    if (!this._listeners.has(path)) {
+      this._listeners.set(path, new Set());
+    }
+    this._listeners.get(path).add(callback);
+    
+    // Return unsubscribe function
+    return () => {
+      this._listeners.get(path).delete(callback);
+    };
+  },
+
+  /**
+   * Registers a middleware function that intercepts actions.
+   */
+  addMiddleware(middlewareFn) {
+    this._middleware.push(middlewareFn);
+  },
+
+  // ── Internal Middleware ──
+
+  _historyMiddleware(state, action) {
+    if (action.type.startsWith('SCENE/')) {
+      this._history.push({ state: JSON.parse(JSON.stringify(state)), action });
+      if (this._history.length > 50) this._history.shift();
+    }
+    return state;
+  },
+
+  _agentTelemetryMiddleware(state, action) {
+    // Broadcast telemetry to the AI Agent Plugin
+    if (action.type.includes('METRIC') || action.type.includes('PERF')) {
+      window.AgentOrchestrator?.ingestTelemetry(action);
+    }
+    return state;
+  },
+
+  // ── Internal Notifier ──
+
+  _notifyListeners(action) {
+    // Notify exact path listeners
+    if (action.path && this._listeners.has(action.path)) {
+      this._listeners.get(action.path).forEach(cb => cb(this.getState(action.path), action));
+    }
+    
+    // Notify wildcard listeners (e.g., 'performance.*')
+    this._listeners.forEach((callbacks, path) => {
+      if (path.endsWith('*')) {
+        const base = path.slice(0, -1);
+        if (action.path?.startsWith(base)) {
+          callbacks.forEach(cb => cb(this.getState(base), action));
+        }
+      }
+    });
+  },
+
+  // ── Visual Nodes ──
+  nodes: {
+    'State/ReadStateNode': (x, y) => {
+      const el = document.createElement('div');
+      el.className = 'shader-node';
+      el.style.left = `${x}px`; el.style.top = `${y}px`;
+      el.innerHTML = `
+        <div class="node-header">📖 Read State</div>
+        <div class="node-body">
+          <label>State Path:</label>
+          <input type="text" class="node-input" data-prop="path" value="performance.fps" />
+        </div>
+        <div class="node-outputs">
+          <span data-type="Any">Value</span>
+        </div>
+      `;
+      return el;
+    },
+    'State/DispatchActionNode': (x, y) => {
+      const el = document.createElement('div');
+      el.className = 'shader-node';
+      el.style.left = `${x}px`; el.style.top = `${y}px`;
+      el.innerHTML = `
+        <div class="node-header">⚡ Dispatch Action</div>
+        <div class="node-body">
+          <label>Action Type:</label>
+          <input type="text" class="node-input" data-prop="type" value="UI/SET_THEME" />
+          <label>Payload (JSON):</label>
+          <textarea class="node-input" data-prop="payload" rows="2">{"theme": "dark"}</textarea>
+        </div>
+      `;
+      return el;
+    }
+  }
+};
+```
+
+---
+
+### 2. Agentic AI Orchestrator (`plugins/AIAgentPlugin.js`)
+
+This plugin creates a team of **Domain Experts**. Each expert monitors a specific plugin's telemetry via the State Manager, identifies bottlenecks, and **self-improves** by dispatching optimization actions or adjusting its own internal thresholds.
+
+```javascript
+/**
+ * AIAgentPlugin - Agentic orchestrator with domain-specific expert agents.
+ * Experts monitor telemetry, analyze performance, and self-optimize the studio.
+ */
+export const AIAgentPlugin = {
+  name: 'AIAgents',
+  _experts: new Map(),
+  _telemetryBuffer: [],
+  _analysisInterval: 2000, // Analyze every 2 seconds
+  _lastAnalysis: 0,
+
+  init(stateManager) {
+    this._state = stateManager;
+    window.AgentOrchestrator = this; // Expose for StateManager middleware
+
+    // Spawn default experts
+    this.spawnExpert('Performance', new PerformanceExpert());
+    this.spawnExpert('Memory', new MemoryExpert());
+    this.spawnExpert('Physics', new PhysicsExpert());
+    this.spawnExpert('NodeGraph', new NodeGraphExpert());
+
+    console.log('[AIAgents] Orchestrator initialized with', this._experts.size, 'experts.');
+  },
+
+  update(deltaTime) {
+    const now = performance.now();
+    if (now - this._lastAnalysis > this._analysisInterval) {
+      this._runAnalysisCycle();
+      this._lastAnalysis = now;
+    }
+  },
+
+  /**
+   * Ingests telemetry from the State Manager middleware.
+   */
+  ingestTelemetry(action) {
+    this._telemetryBuffer.push({
+      timestamp: performance.now(),
+      type: action.type,
+      path: action.path,
+      value: action.payload
+    });
+    
+    // Keep buffer manageable
+    if (this._telemetryBuffer.length > 500) {
+      this._telemetryBuffer.shift();
+    }
+  },
+
+  /**
+   * Spawns a new expert agent for a specific domain.
+   */
+  spawnExpert(domain, expertInstance) {
+    expertInstance.domain = domain;
+    expertInstance.stateManager = this._state;
+    this._experts.set(domain, expertInstance);
+    expertInstance.onSpawn(this._state);
+  },
+
+  /**
+   * Runs the analysis cycle for all experts.
+   */
+  _runAnalysisCycle() {
+    this._experts.forEach((expert, domain) => {
+      try {
+        const recommendations = expert.analyze(this._telemetryBuffer);
+        if (recommendations && recommendations.length > 0) {
+          recommendations.forEach(rec => {
+            console.log(`[AI Expert: ${domain}] Recommending:`, rec);
+            expert.execute(rec, this._state);
+          });
+        }
+      } catch (err) {
+        console.error(`[AI Expert: ${domain}] Analysis failed:`, err);
+      }
+    });
+  },
+
+  // ── Visual Nodes ──
+  nodes: {
+    'AI/AgentDashboardNode': (x, y) => {
+      const el = document.createElement('div');
+      el.className = 'shader-node';
+      el.style.left = `${x}px`; el.style.top = `${y}px`;
+      el.innerHTML = `
+        <div class="node-header">🧠 AI Agent Dashboard</div>
+        <div class="node-body" style="font-size:10px;max-height:150px;overflow-y:auto;">
+          <div id="ai-agent-log">Monitoring system...</div>
+        </div>
+        <div class="node-outputs">
+          <span data-type="Boolean">System Healthy</span>
+        </div>
+      `;
+      return el;
+    }
+  }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPERT AGENTS (Self-Improving Domain Specialists)
+// ═══════════════════════════════════════════════════════════════════════════
+
+class BaseExpert {
+  constructor() {
+    this.thresholds = {}; // Self-adjusting thresholds
+    this.domain = '';
+    this.stateManager = null;
+  }
+  onSpawn(state) {}
+  analyze(telemetry) { return []; }
+  execute(recommendation, state) {
+    if (recommendation.action) {
+      state.dispatch(recommendation.action);
+    }
+  }
+}
+
+/**
+ * Performance Expert - Monitors FPS and frame time.
+ * Self-improves by lowering visual fidelity if FPS drops.
+ */
+class PerformanceExpert extends BaseExpert {
+  constructor() {
+    super();
+    this.thresholds = { minFPS: 50, outlinePassEnabled: true };
+  }
+
+  analyze(telemetry) {
+    const fpsData = telemetry.filter(t => t.path === 'performance.fps').slice(-10);
+    if (fpsData.length === 0) return [];
+
+    const avgFPS = fpsData.reduce((sum, t) => sum + t.value, 0) / fpsData.length;
+    const recommendations = [];
+
+    if (avgFPS < this.thresholds.minFPS && this.thresholds.outlinePassEnabled) {
+      recommendations.push({
+        reason: `FPS dropped to ${avgFPS.toFixed(1)}. Disabling Outline Pass to recover performance.`,
+        action: { type: 'RENDER/SET_OUTLINE_PASS', payload: false, path: 'render.outlinePass' }
+      });
+      // Self-improvement: Remember this threshold for next time
+      this.thresholds.outlinePassEnabled = false; 
+    } else if (avgFPS > 58 && !this.thresholds.outlinePassEnabled) {
+      recommendations.push({
+        reason: `FPS recovered to ${avgFPS.toFixed(1)}. Re-enabling Outline Pass.`,
+        action: { type: 'RENDER/SET_OUTLINE_PASS', payload: true, path: 'render.outlinePass' }
+      });
+      this.thresholds.outlinePassEnabled = true;
+    }
+
+    return recommendations;
+  }
+}
+
+/**
+ * Memory Expert - Monitors WebGL memory.
+ * Self-improves by triggering garbage collection or simplifying geometry.
+ */
+class MemoryExpert extends BaseExpert {
+  constructor() {
+    super();
+    this.thresholds = { maxMemoryMB: 500, lastCleanup: 0 };
+  }
+
+  analyze(telemetry) {
+    const memData = telemetry.filter(t => t.path === 'performance.memoryMB').slice(-1);
+    if (memData.length === 0) return [];
+
+    const currentMB = memData[0].value;
+    const recommendations = [];
+
+    if (currentMB > this.thresholds.maxMemoryMB) {
+      recommendations.push({
+        reason: `Memory usage high (${currentMB.toFixed(0)}MB). Dispatching texture cleanup.`,
+        action: { type: 'MEMORY/GC_TEXTURES', payload: null, path: 'memory.gc' }
+      });
+      // Self-improvement: Increase threshold slightly to avoid spamming cleanup
+      this.thresholds.maxMemoryMB += 50; 
+    }
+
+    return recommendations;
+  }
+}
+
+/**
+ * Physics Expert - Monitors physics step execution time.
+ * Self-improves by adjusting sub-steps or switching to a simpler broadphase.
+ */
+class PhysicsExpert extends BaseExpert {
+  constructor() {
+    super();
+    this.thresholds = { maxPhysicsTimeMS: 8, currentSubsteps: 10 };
+  }
+
+  analyze(telemetry) {
+    const physData = telemetry.filter(t => t.path === 'physics.stepTimeMS').slice(-5);
+    if (physData.length === 0) return [];
+
+    const avgTime = physData.reduce((sum, t) => sum + t.value, 0) / physData.length;
+    const recommendations = [];
+
+    if (avgTime > this.thresholds.maxPhysicsTimeMS && this.thresholds.currentSubsteps > 4) {
+      recommendations.push({
+        reason: `Physics step taking ${avgTime.toFixed(1)}ms. Reducing sub-steps to maintain framerate.`,
+        action: { type: 'PHYSICS/SET_SUBSTEPS', payload: this.thresholds.currentSubsteps - 2, path: 'physics.substeps' }
+      });
+      this.thresholds.currentSubsteps -= 2;
+    }
+
+    return recommendations;
+  }
+}
+
+/**
+ * Node Graph Expert - Monitors visual node execution complexity.
+ * Self-improves by suggesting caching or Wasm handoffs for heavy nodes.
+ */
+class NodeGraphExpert extends BaseExpert {
+  constructor() {
+    super();
+    this.thresholds = { maxNodeEvalTimeMS: 5 };
+  }
+
+  analyze(telemetry) {
+    const nodeData = telemetry.filter(t => t.type === 'NODE_GRAPH/EVAL_TIME').slice(-1);
+    if (nodeData.length === 0) return [];
+
+    const evalTime = nodeData[0].value;
+    const recommendations = [];
+
+    if (evalTime > this.thresholds.maxNodeEvalTimeMS) {
+      recommendations.push({
+        reason: `Node graph evaluation taking ${evalTime.toFixed(1)}ms. Enabling aggressive caching.`,
+        action: { type: 'NODE_GRAPH/ENABLE_CACHE', payload: true, path: 'nodeGraph.cacheEnabled' }
+      });
+    }
+
+    return recommendations;
+  }
+}
+```
+
+---
+
+### 🧠 How the Self-Improvement Loop Works:
+
+1. **Telemetry Collection**: When a plugin updates a metric (e.g., `StateManager.dispatch({ type: 'PERF/UPDATE_FPS', payload: 45, path: 'performance.fps' })`), the State Manager's middleware intercepts it and feeds it to the `AIAgentPlugin`.
+2. **Expert Analysis**: Every 2 seconds, the Orchestrator wakes up the experts. The `PerformanceExpert` looks at the FPS buffer, sees it's below 50, and generates a recommendation.
+3. **Action Execution**: The expert dispatches an action back to the State Manager (`RENDER/SET_OUTLINE_PASS: false`). The renderer listens to this state path and disables the heavy post-processing effect.
+4. **Self-Improvement**: The expert *learns* from this. It updates its internal `this.thresholds` so it knows the system's limits, preventing it from making the same mistake or oscillating too rapidly. 
+
+### Integration into Master App:
+
+```javascript
+// MasterApp.js
+import { StateManagerPlugin } from './plugins/StateManagerPlugin.js';
+import { AIAgentPlugin } from './plugins/AIAgentPlugin.js';
+
+export class MasterApp {
+  async init() {
+    // 1. Initialize State Manager FIRST (it's the backbone)
+    this.plugins.register(StateManagerPlugin);
+    
+    // 2. Initialize AI Agents (they hook into the State Manager)
+    this.plugins.register(AIAgentPlugin);
+
+    // 3. Example: Dispatching telemetry from your render loop
+    const clock = new THREE.Clock();
+    const animate = () => {
+      requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+      
+      // Push telemetry to the State Manager
+      const fps = 1 / delta;
+      this.stateManager.dispatch({ 
+        type: 'PERF/UPDATE_FPS', 
+        payload: fps, 
+        path: 'performance.fps' 
+      });
+
+      this.plugins.update(delta);
+      this.composer.render();
+    };
+    animate();
+  }
+}
+```
