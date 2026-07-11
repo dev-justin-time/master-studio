@@ -31,7 +31,8 @@ export const TransformGizmoPlugin = {
 
     // Defer actual TransformControls creation until renderer/camera are available.
     // MasterApp will call setup() after the renderer is initialized.
-    this._state.on('selection:changed', (objects) => this._onSelectionChanged(objects));
+    this._onSelectionChangedBound = (objects) => this._onSelectionChanged(objects);
+    this._state.on('selection:changed', this._onSelectionChangedBound);
   },
 
   /**
@@ -39,7 +40,6 @@ export const TransformGizmoPlugin = {
    */
   setup(camera, renderer, orbitControls, scene) {
     this._camera = camera;
-    this._renderer = renderer;
     this._orbitControls = orbitControls;
     this._scene = scene;
 
@@ -208,6 +208,10 @@ export const TransformGizmoPlugin = {
       this._controls.detach();
       this._controls.dispose();
       this._controls = null;
+    }
+    if (this._state && this._onSelectionChangedBound) {
+      this._state.off('selection:changed', this._onSelectionChangedBound);
+      this._onSelectionChangedBound = null;
     }
   },
 

@@ -476,16 +476,10 @@ export class MasterApp {
           selection?.deselectAll();
           break;
         case key === 'g' && !ctrl:
-          e.preventDefault();
-          gizmo?.setMode('translate');
-          break;
         case key === 'r' && !ctrl:
-          e.preventDefault();
-          gizmo?.setMode('rotate');
-          break;
         case key === 's' && !ctrl:
           e.preventDefault();
-          gizmo?.setMode('scale');
+          gizmo?.handleKey(key, e);
           break;
         case key === 't' && !ctrl:
           e.preventDefault();
