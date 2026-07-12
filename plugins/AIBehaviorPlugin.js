@@ -4,6 +4,7 @@
  * Sandboxed per-object AI logic delegates to Lua Wasm via the bridge.
  */
 import { createNodeCard } from './NodeFactory.js';
+import { logger } from '../core/Logger.js';
 
 export const AIBehaviorPlugin = {
   name: 'AIBehaviorPlugin',
@@ -14,10 +15,10 @@ export const AIBehaviorPlugin = {
     this._state = state;
     state.on('state:selectedObject:changed', obj => {
       if (obj && this._behaviors.has(obj.uuid)) {
-        console.log(`[AIBehavior] Selected: ${obj.name}, state: ${this._behaviors.get(obj.uuid).current}`);
+        logger.log(`[AIBehavior] Selected: ${obj.name}, state: ${this._behaviors.get(obj.uuid).current}`);
       }
     });
-    console.log('[AIBehaviorPlugin] Initialized');
+    logger.log('AIBehaviorPlugin', 'Initialized');
   },
 
   update(deltaTime) {
@@ -54,7 +55,7 @@ export const AIBehaviorPlugin = {
 
   /** Find a path between two points (simple A* stub) */
   findPath(from, to) {
-    console.log(`[AIBehavior] Pathfinding from ${from} to ${to}`);
+    logger.log('AIBehavior', `Pathfinding from ${from} to ${to}`);
     // Stub — in production, delegates to Go Wasm for concurrent pathfinding
     return [from, to];
   },

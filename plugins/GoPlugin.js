@@ -4,6 +4,7 @@
  */
 import * as THREE from 'three';
 import { GoAssetBridge } from '../bindings/WasmBridge.js';
+import { logger } from '../core/Logger.js';
 
 export const GoPlugin = {
   name: 'Go',
@@ -29,9 +30,9 @@ export const GoPlugin = {
       // gracefully degrades if the Go Wasm binary is unavailable.
       this._wasmModule = GoAssetBridge;
       this._isInitialized = true;
-      console.log('[Go] Wasm bridge initialized');
+      logger.log('Go', 'Wasm bridge initialized');
     } catch (err) {
-      console.error('[Go] Failed to initialize Wasm bridge:', err);
+      logger.error('Go', 'Failed to initialize Wasm bridge:', err);
     }
   },
 
@@ -53,7 +54,7 @@ export const GoPlugin = {
 
     const worker = this._getAvailableWorker();
     if (!worker) {
-      console.warn('[Go] No workers available, queuing task');
+      logger.warn('Go', 'No workers available, queuing task');
       return new Promise(resolve => {
         setTimeout(() => {
           this.parsePointCloud(fileBuffer).then(resolve);
@@ -67,7 +68,7 @@ export const GoPlugin = {
       const result = await this._wasmModule.parsePointCloud(fileBuffer);
 
       if (!result || !result.positions) {
-        console.warn('[Go] Point cloud parsing returned no result');
+        logger.warn('Go', 'Point cloud parsing returned no result');
         return null;
       }
 
@@ -108,7 +109,7 @@ export const GoPlugin = {
       const result = await this._wasmModule.importCAD(fileBuffer);
 
       if (!result || !result.meshes) {
-        console.warn('[Go] CAD import returned no result');
+        logger.warn('Go', 'CAD import returned no result');
         return null;
       }
 

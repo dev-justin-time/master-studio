@@ -4,6 +4,7 @@
  */
 import * as THREE from 'three';
 import { createNodeCard } from './NodeFactory.js';
+import { logger } from '../core/Logger.js';
 
 export const LightingCameraPlugin = {
   name: 'LightingCamera',
@@ -140,7 +141,7 @@ export const LightingCameraPlugin = {
     const lighting = pluginManager?._plugins?.get('Lighting');
     if (lighting?.applyPreset) {
       lighting.applyPreset(presetName);
-      console.log(`[LightingCamera] Lighting preset → ${presetName}`);
+      logger.log(`[LightingCamera] Lighting preset → ${presetName}`);
       return;
     }
 

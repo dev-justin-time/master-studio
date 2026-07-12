@@ -1,3 +1,4 @@
+import { logger } from '../core/Logger.js';
 /**
  * MenuSystemPlugin - Professional menu bar with organized dropdowns.
  * Injects a fixed top menu bar and adjusts the app layout accordingly.
@@ -51,8 +52,8 @@ export const MenuSystemPlugin = {
       { label: 'Export GLB', action: () => this._dispatch('export', { format: 'glb' }) },
       { label: 'Export GLTF', action: () => this._dispatch('export', { format: 'gltf' }) },
       { type: 'separator' },
-      { label: 'Save Scene', shortcut: 'Ctrl+S', action: () => console.log('[Menu] Save scene') },
-      { label: 'Load Scene', shortcut: 'Ctrl+O', action: () => console.log('[Menu] Load scene') },
+      { label: 'Save Scene', shortcut: 'Ctrl+S', action: () => logger.log('Menu', 'Save scene') },
+      { label: 'Load Scene', shortcut: 'Ctrl+O', action: () => logger.log('Menu', 'Load scene') },
     ]);
 
     this._addMenu('Edit', [
@@ -79,6 +80,17 @@ export const MenuSystemPlugin = {
         { label: 'Torus', action: () => this._dispatch('addPrimitive', { type: 'torus' }) },
         { label: 'Plane', action: () => this._dispatch('addPrimitive', { type: 'plane' }) },
       ]},
+      { label: 'Add Water Surface', action: () => this._dispatch('addWater', {
+        width: 200, height: 200, segments: 128,
+        distortionScale: 3.7, alpha: 1.0,
+        sunDirection: [0.7, 0.3, 0.7], sunColor: 0xffffff, waterColor: 0x001e0f,
+        foamIntensity: 0.35,
+      }) },
+      { label: 'Add Buoyant Box', action: () => {
+        this._dispatch('addPrimitive', { type: 'cube' });
+        // Buoyancy attaches automatically because Water sets userData.isWater
+        // on the mesh; PhysicsPlugin picks it up on the next step.
+      } },
       { type: 'separator' },
       { label: 'Group', shortcut: 'Ctrl+G', action: () => this._dispatch('group') },
       { label: 'Ungroup', shortcut: 'Ctrl+Shift+G', action: () => this._dispatch('ungroup') },
@@ -118,10 +130,22 @@ export const MenuSystemPlugin = {
     this._addMenu('Window', [
       { label: 'Toggle Node Graph', action: () => this._dispatch('togglePanel', { panel: 'sidebar' }) },
       { label: 'Toggle Debug Panel', action: () => this._dispatch('togglePanel', { panel: 'debug' }) },
+      { type: 'separator' },
+      { label: 'Open Brutalist Editor →', action: () => { window.location.href = '/studio.html'; } },
+      { label: 'Back to Node Editor ←', action: () => { window.location.href = '/index.html'; } },
+      { label: 'Open Text Generator →', action: () => { window.location.href = '/scene.html'; } },
+      { label: 'Open Main Scene →', action: () => { window.location.href = '/main.html'; } },
+      { label: 'Open Node Architect →', action: () => { window.location.href = '/nodearchitect.html'; } },
+      { type: 'separator' },
+      { label: 'Brutalist Skin v4.2.0', shortcut: '✓', action: () => {
+        this._dispatch('notification', { type: 'success', message: 'Brutalist skin active — drop nodes anywhere in the engine.' });
+        logger.info('Menu', 'Brutalist skin confirmed active');
+      } },
+      { label: 'Add Node to Graph', action: () => document.getElementById('add-node-menu')?.firstElementChild?.click() },
     ]);
 
     this._addMenu('Help', [
-      { label: 'Keyboard Shortcuts', action: () => console.log('[Menu] Keyboard shortcuts: L=Lasso G=Group U=Ungroup S=Sticky P=Debug 1-3=Color') },
+      { label: 'Keyboard Shortcuts', action: () => logger.log('Menu', 'Keyboard shortcuts: L=Lasso G=Group U=Ungroup S=Sticky P=Debug 1-3=Color') },
       { label: 'About Master Studio', action: () => alert('Master Studio — 3D Studio Environment') },
     ]);
   },

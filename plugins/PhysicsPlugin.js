@@ -5,6 +5,7 @@
  * In production, this delegates heavy lifting to Rust Wasm via the bridge.
  */
 import { createNodeCard } from './NodeFactory.js';
+import { logger } from '../core/Logger.js';
 
 export const PhysicsPlugin = {
   name: 'PhysicsPlugin',
@@ -18,7 +19,7 @@ export const PhysicsPlugin = {
 
   init(state) {
     this._state = state;
-    console.log('[PhysicsPlugin] Initialized');
+    logger.log('PhysicsPlugin', 'Initialized');
   },
 
   update(deltaTime) {

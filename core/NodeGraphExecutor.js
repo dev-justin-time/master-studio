@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { logger } from './Logger.js';
 
 /**
  * NodeGraphExecutor - Evaluates visual logic graphs (Geometry, Shader, Physics).
@@ -30,7 +31,7 @@ export class NodeGraphExecutor {
 
     // Cycle detection — prevent infinite recursion
     if (visited.has(node)) {
-      console.warn(`[NodeGraphExecutor] Cycle detected at node: ${node.type}`);
+      logger.warn(`[NodeGraphExecutor] Cycle detected at node: ${node.type}`);
       return null;
     }
     visited.add(node);
@@ -54,7 +55,7 @@ export class NodeGraphExecutor {
 
   _executeNodeLogic(nodeType, inputs, deltaTime) {
     if (!nodeType || !nodeType.includes('/')) {
-      console.warn(`[NodeGraphExecutor] Invalid node type: "${nodeType}"`);
+      logger.warn('NodeGraphExecutor', `Invalid node type: "${nodeType}"`);
       return inputs;
     }
     const [category, action] = nodeType.split('/');
@@ -74,6 +75,8 @@ export class NodeGraphExecutor {
         return this._handleGameMapNode(action, inputs);
       case 'Selection':
         return this._handleSelectionNode(action, inputs);
+      case 'Water':
+        return this._handleWaterNode(action, inputs);
       default:
         return inputs;
     }
@@ -110,7 +113,7 @@ export class NodeGraphExecutor {
    */
   async executeNodeOnDemand(node) {
     if (!node || !node.dom) {
-      console.warn('[NodeGraphExecutor] Cannot execute invalid node');
+      logger.warn('NodeGraphExecutor', 'Cannot execute invalid node');
       return null;
     }
 
@@ -125,7 +128,11 @@ export class NodeGraphExecutor {
       return this._executeGoNode(action, parsed);
     }
 
-    console.warn(`[NodeGraphExecutor] On-demand execution not yet implemented for ${node.type}`);
+    if (category === 'Water') {
+      return this._executeWaterNode(node, parsed);
+    }
+
+    logger.warn('NodeGraphExecutor', `On-demand execution not yet implemented for ${node.type}`);
     return null;
   }
 
@@ -148,6 +155,10 @@ export class NodeGraphExecutor {
         } else {
           value = el.value;
         }
+      } else if (el.tagName === 'TEXTAREA') {
+        // Read .value (live content) rather than .textContent (default value)
+        // so edits after node creation are picked up by executeNodeOnDemand.
+        value = el.value;
       } else if (el.tagName === 'SELECT') {
         value = el.value;
       } else {
@@ -165,7 +176,7 @@ export class NodeGraphExecutor {
     const rust = this.plugins._plugins.get('Rust');
 
     if (!rust) {
-      console.warn('[NodeGraphExecutor] RustPlugin not registered');
+      logger.warn('NodeGraphExecutor', 'RustPlugin not registered');
       return null;
     }
 
@@ -175,7 +186,7 @@ export class NodeGraphExecutor {
         const meshB = inputs.meshB || selection[1];
 
         if (!meshA || !meshB) {
-          console.warn('[NodeGraphExecutor] Boolean CSG requires 2 selected meshes');
+          logger.warn('NodeGraphExecutor', 'Boolean CSG requires 2 selected meshes');
           this._notify('Boolean CSG requires 2 selected meshes', 'warning');
           return null;
         }
@@ -192,7 +203,7 @@ export class NodeGraphExecutor {
         const mesh = inputs.mesh || selection[0];
 
         if (!mesh) {
-          console.warn('[NodeGraphExecutor] Decimate requires a selected mesh');
+          logger.warn('NodeGraphExecutor', 'Decimate requires a selected mesh');
           this._notify('Decimate requires a selected mesh', 'warning');
           return null;
         }
@@ -206,7 +217,7 @@ export class NodeGraphExecutor {
       }
 
       default:
-        console.warn(`[NodeGraphExecutor] Unknown Rust node action: ${action}`);
+        logger.warn('NodeGraphExecutor', `Unknown Rust node action: ${action}`);
     }
 
     return null;
@@ -216,7 +227,7 @@ export class NodeGraphExecutor {
     const go = this.plugins._plugins.get('Go');
 
     if (!go) {
-      console.warn('[NodeGraphExecutor] GoPlugin not registered');
+      logger.warn('NodeGraphExecutor', 'GoPlugin not registered');
       return null;
     }
 
@@ -256,7 +267,7 @@ export class NodeGraphExecutor {
       }
 
       default:
-        console.warn(`[NodeGraphExecutor] Unknown Go node action: ${action}`);
+        logger.warn('NodeGraphExecutor', `Unknown Go node action: ${action}`);
     }
 
     return null;
@@ -296,7 +307,7 @@ export class NodeGraphExecutor {
 
   _notify(message, type = 'info') {
     this.state.emit('notification', { message, type });
-    console.log(`[NodeGraphExecutor] ${message}`);
+    logger.log('NodeGraphExecutor', `${message}`);
   }
 
   _handleLogicNode(action, inputs, dt) {
@@ -323,5 +334,43 @@ export class NodeGraphExecutor {
   _handleSelectionNode(action, inputs) {
     // Selection nodes self-manage via plugin methods — pass-through for now
     return inputs;
+  }
+
+  _handleWaterNode(action, inputs) {
+    // Per-frame Water work is time-uniform progression, which the Water
+    // plugin handles in its own `update(dt)` hook. This category handler
+    // is reserved for graph-time mutations (e.g. swapping sun direction
+    // when a state machine triggers a dawn/dusk transition).
+    logger.log('NodeGraphExecutor', `Water node ${action} pass-through`);
+    return inputs;
+  }
+
+  /**
+   * On-demand execution path for `Water/*` nodes. The Water plugin
+   * owns its own `executeNode(node, parsed)` method, so we just
+   * delegate. Returns the water mesh (the new managed object) so the
+   * scene + selection state stay in sync via `state.emit`.
+   */
+  async _executeWaterNode(node, parsed) {
+    const water = this.plugins._plugins.get('Water');
+    if (!water) {
+      this._notify('WaterPlugin not registered', 'warning');
+      return null;
+    }
+    if (typeof water.executeNode !== 'function') {
+      this._notify('WaterPlugin missing executeNode()', 'warning');
+      return null;
+    }
+    try {
+      const result = await water.executeNode(node, parsed);
+      if (result?.mesh) {
+        this._notify(`Created ${result.mesh.name}`, 'success');
+        return result.mesh;
+      }
+    } catch (err) {
+      logger.error('NodeGraphExecutor', 'Water node execution failed:', err);
+      this._notify(`Water node failed: ${err.message || err}`, 'error');
+    }
+    return null;
   }
 }

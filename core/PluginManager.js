@@ -1,3 +1,4 @@
+import { logger } from './Logger.js';
 /**
  * PluginManager - Handles plugin lifecycle and visual node registration.
  */
@@ -19,7 +20,7 @@ export class PluginManager {
         this._nodeRegistry.set(nodeName, domCreator);
       });
     }
-    console.log(`[PluginManager] Registered: ${plugin.name}`);
+    logger.log(`[PluginManager] Registered: ${plugin.name}`);
   }
 
   update(deltaTime) {

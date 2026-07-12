@@ -1,3 +1,4 @@
+import { logger } from '../core/Logger.js';
 /**
  * WasmBridge - Loads and initializes Rust and Go WebAssembly modules.
  * Falls back gracefully if a module is unavailable.
@@ -19,9 +20,9 @@ export async function initWasmModules() {
       await rustModule.default();
     }
     rustReady = true;
-    console.log('[WasmBridge] Rust module loaded');
+    logger.log('WasmBridge', 'Rust module loaded');
   } catch (err) {
-    console.warn('[WasmBridge] Rust module not available:', err);
+    logger.warn('WasmBridge', 'Rust module not available:', err);
     rustReady = false;
   }
 
@@ -33,9 +34,9 @@ export async function initWasmModules() {
     const result = await WebAssembly.instantiateStreaming(response, go.importObject);
     go.run(result.instance);
     goReady = true;
-    console.log('[WasmBridge] Go module loaded');
+    logger.log('WasmBridge', 'Go module loaded');
   } catch (err) {
-    console.warn('[WasmBridge] Go module not available:', err);
+    logger.warn('WasmBridge', 'Go module not available:', err);
     goReady = false;
   }
 }
@@ -45,7 +46,7 @@ export async function initWasmModules() {
 export const RustGeometryBridge = {
   computeBoolean: async (meshA, meshB, operation) => {
     if (!rustReady || !rustModule) {
-      console.warn('[RustGeometryBridge] Rust Wasm not ready');
+      logger.warn('RustGeometryBridge', 'Rust Wasm not ready');
       return meshA;
     }
 
@@ -59,7 +60,7 @@ export const RustGeometryBridge = {
 
   decimateMesh: async (mesh, percent) => {
     if (!rustReady || !rustModule) {
-      console.warn('[RustGeometryBridge] Rust Wasm not ready');
+      logger.warn('RustGeometryBridge', 'Rust Wasm not ready');
       return mesh.geometry;
     }
 
@@ -71,7 +72,7 @@ export const RustGeometryBridge = {
 
   generateBVH: async (mesh) => {
     if (!rustReady || !rustModule) {
-      console.warn('[RustGeometryBridge] Rust Wasm not ready');
+      logger.warn('RustGeometryBridge', 'Rust Wasm not ready');
       return null;
     }
 
@@ -85,7 +86,7 @@ export const RustGeometryBridge = {
 export const RustPhysicsBridge = {
   stepPhysics: async (bodies, deltaTime) => {
     if (!rustReady || !rustModule) {
-      console.warn('[RustPhysicsBridge] Rust Wasm not ready');
+      logger.warn('RustPhysicsBridge', 'Rust Wasm not ready');
       return bodies;
     }
 
@@ -104,7 +105,7 @@ export const RustPhysicsBridge = {
 export const GoAssetBridge = {
   parsePointCloud: async (fileBuffer) => {
     if (!goReady || !window.goParsePointCloud) {
-      console.warn('[GoAssetBridge] Go Wasm not ready');
+      logger.warn('GoAssetBridge', 'Go Wasm not ready');
       return null;
     }
 
@@ -113,7 +114,7 @@ export const GoAssetBridge = {
 
   importCAD: async (fileBuffer) => {
     if (!goReady || !window.goImportCAD) {
-      console.warn('[GoAssetBridge] Go Wasm not ready');
+      logger.warn('GoAssetBridge', 'Go Wasm not ready');
       return null;
     }
 

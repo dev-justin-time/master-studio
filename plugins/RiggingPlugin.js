@@ -5,13 +5,14 @@
  */
 import * as THREE from 'three';
 import { createNodeCard } from './NodeFactory.js';
+import { logger } from '../core/Logger.js';
 
 export const RiggingPlugin = {
   name: 'RiggingPlugin',
 
   init(state) {
     this._state = state;
-    console.log('[RiggingPlugin] Initialized');
+    logger.log('RiggingPlugin', 'Initialized');
   },
 
   update(deltaTime) {

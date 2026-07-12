@@ -30,6 +30,8 @@ import { TransformGizmoPlugin } from './plugins/TransformGizmoPlugin.js';
 import { RustPlugin } from './plugins/RustPlugin.js';
 import { GoPlugin } from './plugins/GoPlugin.js';
 import { LuaPlugin } from './plugins/LuaPlugin.js';
+import { WaterPlugin } from './plugins/WaterPlugin.js';
+import { logger } from './core/Logger.js';
 
 export class MasterApp {
   constructor() {
@@ -77,7 +79,7 @@ export class MasterApp {
     stateMgr.subscribe('render.outlinePass', (enabled) => {
       if (this._outlinePass) {
         this._outlinePass.enabled = enabled;
-        console.log('[AI Optimize] Outline pass:', enabled ? 'ON' : 'OFF');
+        logger.log('AI Optimize', 'Outline pass:', enabled ? 'ON' : 'OFF');
       }
     });
 
@@ -85,12 +87,12 @@ export class MasterApp {
       const physics = this.plugins._plugins.get('PhysicsPlugin');
       if (physics && substeps > 0) {
         physics._timeStep = 1 / substeps;
-        console.log('[AI Optimize] Physics substeps:', substeps, '→ timestep:', physics._timeStep.toFixed(4));
+        logger.log('AI Optimize', 'Physics substeps:', substeps, '→ timestep:', physics._timeStep.toFixed(4));
       }
     });
 
     stateMgr.subscribe('memory.gc', (timestamp) => {
-      console.log('[AI Optimize] Memory GC triggered at', timestamp);
+      logger.log('AI Optimize', 'Memory GC triggered at', timestamp);
       // Reset renderer info counters to free tracked memory
       if (this.renderer) {
         this.renderer.info.reset();
@@ -137,6 +139,9 @@ export class MasterApp {
     this.plugins.register(GoPlugin);
     this.plugins.register(LuaPlugin);
 
+    // Register Water (shader surface + foam + edge fade + cube-camera reflections)
+    this.plugins.register(WaterPlugin);
+
     // Setup TransformControls now that renderer/camera exist
     const gizmo = this.plugins._plugins.get('TransformGizmo');
     if (gizmo?.setup) {
@@ -149,7 +154,7 @@ export class MasterApp {
       // Inject OutlinePass into the photorealistic pipeline (after all passes, so outline stays sharp)
       prPlugin.composer.addPass(this._outlinePass);
       this.composer = prPlugin.composer;
-      console.log('[MasterApp] Swapped to PhotorealisticRender pipeline.');
+      logger.log('MasterApp', 'Swapped to PhotorealisticRender pipeline.');
     }
 
     // Wire menu render-preset & screenshot events to PhotorealisticRender
@@ -187,14 +192,19 @@ export class MasterApp {
     // Start Render Loop
     this._animate();
 
-    console.log('[MasterApp] Initialized successfully.');
+    logger.log('MasterApp', 'Initialized successfully.');
   }
 
   _initRenderer() {
     const canvas = document.getElementById('renderCanvas');
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    // Size from the canvas's actual CSS box (works for both full-window and 3-column
+    // brutalist layouts). Fall back to window inner dims in case layout hasn't
+    // settled yet (e.g. canvas inserted before DOM ready).
+    const initW = canvas.clientWidth || window.innerWidth;
+    const initH = canvas.clientHeight || window.innerHeight;
+    this.renderer.setSize(initW, initH);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.state.set('renderer', this.renderer);
@@ -203,13 +213,22 @@ export class MasterApp {
     this.controls.enableDamping = true;
     this.state.set('controls', this.controls);
 
-    window.addEventListener('resize', () => {
-      this.camera.aspect = window.innerWidth / window.innerHeight;
+    const _resizeRenderer = () => {
+      const w = canvas.clientWidth || window.innerWidth;
+      const h = canvas.clientHeight || window.innerHeight;
+      this.camera.aspect = w / h;
       this.camera.updateProjectionMatrix();
-      this.renderer.setSize(window.innerWidth, window.innerHeight);
-      this.composer.setSize(window.innerWidth, window.innerHeight);
-      this._outlinePass?.setSize(window.innerWidth, window.innerHeight);
-    });
+      this.renderer.setSize(w, h);
+      this.composer.setSize(w, h);
+      this._outlinePass?.setSize(w, h);
+    };
+    window.addEventListener('resize', _resizeRenderer);
+    // Also watch the canvas's host element (e.g. <section id="viewport">) so
+    // brutalist 3-column resizes — sidebar collapse, modal open, etc. — reflow
+    // the renderer correctly without depending solely on window resize.
+    if (typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(_resizeRenderer).observe(canvas.parentElement || canvas);
+    }
   }
 
   _initLights() {
@@ -244,6 +263,9 @@ export class MasterApp {
         }
       });
       this._outlinePass.selectedObjects = meshes;
+      // Mirror onto window CustomEvent so external UIs (e.g. studio.html's
+      // properties panel) can sync without reaching into MasterState.
+      window.dispatchEvent(new CustomEvent('selection:changed', { detail: objects }));
     });
 
     // Click-to-select via raycasting (with drag threshold to avoid orbit interference)
@@ -292,7 +314,7 @@ export class MasterApp {
   }
 
   async _initWasmModules() {
-    console.log('[MasterApp] Initializing WebAssembly modules...');
+    logger.log('MasterApp', 'Initializing WebAssembly modules...');
     // Initialize language plugin Wasm runtimes (plugins gracefully degrade if Wasm is unavailable)
     const rust = this.plugins._plugins.get('Rust');
     const go = this.plugins._plugins.get('Go');
@@ -302,7 +324,7 @@ export class MasterApp {
     if (go?.init) await go.init(this.state);
     if (lua?.init) await lua.init(this.state);
 
-    console.log('[MasterApp] Language plugins initialized.');
+    logger.log('MasterApp', 'Language plugins initialized.');
   }
 
   _initNodeEditorUI() {
@@ -359,7 +381,7 @@ export class MasterApp {
     if (runBtn) {
       runBtn.addEventListener('click', () => {
         this.nodeGraph.executeNodeOnDemand(nodeData).catch(err => {
-          console.error('[MasterApp] Node execution failed:', err);
+          logger.error('MasterApp', 'Node execution failed:', err);
         });
       });
     }
@@ -403,7 +425,7 @@ export class MasterApp {
         body.velocity.z = (Math.random() - 0.5) * 4;
       }
       selection?._setSelection([cube]);
-      console.log('[Toolbar] Spawned cube:', cube.name);
+      logger.log('Toolbar', 'Spawned cube:', cube.name);
     });
 
     document.getElementById('btn-select-all')?.addEventListener('click', () => {
@@ -567,7 +589,7 @@ export class MasterApp {
     }
 
     this.state.emit('physics:debug:toggled', this._physicsDebug);
-    console.log('[PhysicsDebug]', this._physicsDebug ? 'ON' : 'OFF');
+    logger.log('PhysicsDebug', this._physicsDebug ? 'ON' : 'OFF');
   }
 
   _renderPhysicsDebug() {
@@ -708,11 +730,11 @@ export class MasterApp {
         autoLOD: false,
         collisionLayer: false
       }).then(world => {
-        console.log('[Demo] Terrain generated:', world?.name);
+        logger.log('Demo', 'Terrain generated:', world?.name);
       });
     }
 
-    console.log(`[Demo] Scene initialized with ${colors.length} selectable objects + terrain`);
+    logger.log(`[Demo] Scene initialized with ${colors.length} selectable objects + terrain`);
   }
 
   // ── File Import (Point Cloud / CAD via Go Wasm) ──
@@ -764,7 +786,7 @@ export class MasterApp {
   async _importFile(file) {
     const go = this.plugins._plugins.get('Go');
     if (!go) {
-      console.warn('[MasterApp] GoPlugin not registered');
+      logger.warn('MasterApp', 'GoPlugin not registered');
       return;
     }
 
@@ -777,12 +799,12 @@ export class MasterApp {
     } else if (['step', 'iges', 'stp', 'igs'].includes(ext)) {
       object = await go.importCAD(buffer);
     } else {
-      console.warn('[MasterApp] Unsupported import format:', ext);
+      logger.warn('MasterApp', 'Unsupported import format:', ext);
       return;
     }
 
     if (!object) {
-      console.warn('[MasterApp] Import returned no result for', file.name);
+      logger.warn('MasterApp', 'Import returned no result for', file.name);
       return;
     }
 
@@ -794,7 +816,7 @@ export class MasterApp {
     const selection = this.plugins._plugins.get('Selection');
     selection?._setSelection([object]);
 
-    console.log('[MasterApp] Imported', file.name, '→', object.name);
+    logger.log('MasterApp', 'Imported', file.name, '→', object.name);
   }
 
   // ── Menu Event Wiring (CustomEvent → plugin methods) ──
@@ -809,18 +831,43 @@ export class MasterApp {
     window.addEventListener('ungroup', () => selection?.ungroupSelected());
 
     // Primitives: spawn via the same logic as btn-add-cube
-    window.addEventListener('addPrimitive', (e) => {
+    window.addEventListener('addPrimitive', async (e) => {
       const physics = this.plugins._plugins.get('PhysicsPlugin');
       const type = e.detail.type;
       let geo;
       switch (type) {
-        case 'cube':      geo = new THREE.BoxGeometry(0.8, 0.8, 0.8); break;
+        case 'cube':
+        case 'box':       geo = new THREE.BoxGeometry(0.8, 0.8, 0.8); break;
+        case 'sphere':
         case 'uvsphere':  geo = new THREE.SphereGeometry(0.45, 32, 32); break;
         case 'icosphere': geo = new THREE.IcosahedronGeometry(0.45); break;
         case 'cone':      geo = new THREE.ConeGeometry(0.45, 0.9, 24); break;
         case 'cylinder':  geo = new THREE.CylinderGeometry(0.4, 0.4, 0.9, 24); break;
         case 'torus':     geo = new THREE.TorusGeometry(0.4, 0.15, 16, 32); break;
         case 'plane':     geo = new THREE.PlaneGeometry(1.2, 1.2); break;
+        case 'capsule':   geo = new THREE.CapsuleGeometry(0.3, 0.6, 4, 8); break;
+        // Pyramid is a square ConeGeometry (4 radial segments)
+        case 'pyramid':   geo = new THREE.ConeGeometry(0.5, 0.9, 4); break;
+        case 'text3d': {
+          // Try real TextGeometry via three's bundled helvetiker font;
+          // gracefully fall back to a thin BoxGeometry if the font load fails.
+          try {
+            const { TextGeometry } = await import('three/addons/geometries/TextGeometry.js');
+            const { FontLoader } = await import('three/addons/loaders/FontLoader.js');
+            const font = await new Promise((resolve, reject) => {
+              new FontLoader().load(
+                'https://threejs.org/examples/fonts/helvetiker_regular.typeface.json',
+                resolve, undefined, reject
+              );
+            });
+            geo = new TextGeometry('MEME', { font, size: 0.5, depth: 0.1, curveSegments: 4 });
+            geo.center();
+          } catch (err) {
+            logger.warn('MasterApp', 'Text3D font load failed, using fallback geometry:', err.message || err);
+            geo = new THREE.BoxGeometry(0.8, 0.4, 0.1);
+          }
+          break;
+        }
         default:          geo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
       }
       const mat = new THREE.MeshStandardMaterial({
@@ -841,7 +888,111 @@ export class MasterApp {
       selection?._setSelection([mesh]);
     });
 
-    // Delete selected (also remove physics bodies)
+    // ── 3D Text Generator (TextGeometry with rich params) ────────────────────
+    // Wired by scene.html's Text Generator modal. The modal dispatches a
+    // `generateText3D` CustomEvent with { text, font, size, depth } where size
+    // is 1-100 (UI scale) and depth is 0-30 (UI scale). Multipliers map them
+    // to Three.js geometry units so the resulting mesh is visible at scene
+    // scale (~0.5 units).
+    //
+    // Fonts: only `helvetiker` is bundled in three.js examples; `space_grotesk`
+    // and `roboto_mono` fall back to helvetiker with a warn so the user keeps
+    // getting a usable result.
+    const TEXT3D_FONT_URLS = {
+      helvetiker:     'https://threejs.org/examples/fonts/helvetiker_regular.typeface.json',
+      space_grotesk:  'https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', // fallback
+      roboto_mono:    'https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', // fallback
+    };
+    const TEXT3D_SIZE_SCALE = 0.012;   // UI 100 → geometry 1.2 units
+    const TEXT3D_DEPTH_SCALE = 0.012;  // UI 30  → geometry 0.36 units
+
+    // Cache loaded font JSONs so repeated CREATE clicks reuse a single fetch.
+    const _text3dFontCache = new Map();
+    async function _loadText3dFont(url) {
+      if (_text3dFontCache.has(url)) return _text3dFontCache.get(url);
+      const { FontLoader } = await import('three/addons/loaders/FontLoader.js');
+      const p = new Promise((resolve, reject) => {
+        new FontLoader().load(url, resolve, undefined, reject);
+      });
+      _text3dFontCache.set(url, p);
+      return p;
+    }
+
+    window.addEventListener('generateText3D', async (e) => {
+      const physics = this.plugins._plugins.get('PhysicsPlugin');
+      const selection = this.plugins._plugins.get('Selection');
+      const detail = e.detail || {};
+      const text = (detail.text || 'HODL').toString().slice(0, 12);
+      const fontKey = (detail.font || 'space_grotesk').toString();
+      const sizeUI = parseFloat(detail.size) || 42;
+      const depthUI = parseFloat(detail.depth) || 8.5;
+      const fontUrl = TEXT3D_FONT_URLS[fontKey] || TEXT3D_FONT_URLS.helvetiker;
+      const isFallback = fontKey !== 'helvetiker';
+      let geo;
+      try {
+        const { TextGeometry } = await import('three/addons/geometries/TextGeometry.js');
+        const font = await _loadText3dFont(fontUrl);
+        geo = new TextGeometry(text, {
+          font,
+          size: sizeUI * TEXT3D_SIZE_SCALE,
+          depth: depthUI * TEXT3D_DEPTH_SCALE,
+          curveSegments: 4,
+          bevelEnabled: false,
+        });
+        geo.center();
+        if (isFallback) {
+          logger.warn('MasterApp', `Font '${fontKey}' not bundled — using helvetiker fallback.`);
+        }
+      } catch (err) {
+        logger.warn('MasterApp', 'Text3D font load failed, using BoxGeometry fallback:', err.message || err);
+        const approxW = text.length * 0.4;
+        geo = new THREE.BoxGeometry(approxW, sizeUI * 0.012, depthUI * 0.012);
+      }
+
+      const mat = new THREE.MeshStandardMaterial({
+        color: Math.random() * 0xffffff,
+        roughness: 0.4,
+        metalness: 0.3,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.name = `Text3D_${text}_${Date.now()}`;
+      mesh.position.set(
+        (Math.random() - 0.5) * 4,
+        1.0 + Math.random() * 1.5,
+        (Math.random() - 0.5) * 4
+      );
+      mesh.userData.isManagedObject = true;
+      mesh.userData.textContent = text;
+      mesh.userData.fontFamily = fontKey;
+      this.scene.add(mesh);
+      // TextGeometry is dense — default to STATIC body to avoid per-frame physics cost.
+      // Users who want gravity/ragdoll can call createRigidBody with mass=0.5 manually.
+      selection?._setSelection([mesh]);
+      window.dispatchEvent(new CustomEvent('text3d:created', { detail: { name: mesh.name } }));
+      logger.log('MasterApp', `Generated 3D text: "${text}" (${mesh.name})`);
+    });
+
+    // ── Select by name (driven by Outliner clicks in scene.html) ─────────────
+    // The scene outliner is a list of buttons; on click they dispatch
+    // `select:byName` with { name }. Here we find the matching scene object
+    // (managedObject only) and push it through SelectionPlugin._setSelection.
+    window.addEventListener('select:byName', (e) => {
+      const target = e.detail?.name;
+      if (!target) return;
+      let match = null;
+      this.scene.traverse(obj => {
+        if (match) return;
+        if (obj.userData?.isManagedObject && obj.name === target) match = obj;
+      });
+      if (match) {
+        const selection = this.plugins._plugins.get('Selection');
+        selection?._setSelection([match]);
+      } else {
+        logger.warn('MasterApp', `select:byName: no managed object named "${target}"`);
+      }
+    });
+
+    // Delete selected (also remove physics bodies + water cube-camera RTTs)
     window.addEventListener('delete', () => {
       const sel = this.state.data.selectedObjects;
       if (sel?.length) {
@@ -849,6 +1000,12 @@ export class MasterApp {
         sel.forEach(obj => {
           if (bodies) bodies.delete(obj.uuid);
           this.scene.remove(obj);
+          // WaterPlugin holds a cubemap `WebGLRenderTarget` per water mesh.
+          // Detaching from scene alone leaks that GFX memory. Notify the
+          // plugin so `disposeWater` runs `_renderTarget.dispose()`.
+          if (obj.userData && obj.userData.isWater) {
+            window.dispatchEvent(new CustomEvent('water:dispose', { detail: { name: obj.name } }));
+          }
         });
         selection?._setSelection([]);
       }
@@ -951,5 +1108,7 @@ export class MasterApp {
 }
 
 // ── Bootstrap ──
-const app = new MasterApp();
-app.init().catch(console.error);
+// Expose on window so external pages (studios, debug panels) can read scene/camera
+// without having to import MasterApp class directly.
+window.app = new MasterApp();
+window.app.init().catch((err) => logger.error('MasterApp', err));

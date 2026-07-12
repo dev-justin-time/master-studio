@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>MEME STUDIO | Node Graph</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Anybody:wght@400;700;800;900&amp;family=Space+Grotesk:wght@500;700&amp;family=Plus+Jakarta+Sans:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .node-canvas {
+            background-image: 
+                radial-gradient(circle, #3b4b35 1px, transparent 1px),
+                radial-gradient(circle, #3b4b35 1px, transparent 1px);
+            background-size: 40px 40px;
+            background-position: 0 0, 20px 20px;
+        }
+        .node-glow:hover {
+            box-shadow: 0 0 20px rgba(2, 230, 0, 0.4);
+        }
+        .noodle-path {
+            stroke-dasharray: 10;
+            animation: dash 20s linear infinite;
+        }
+        @keyframes dash {
+            to {
+                stroke-dashoffset: -1000;
+            }
+        }
+        .neon-strobe {
+            animation: strobe 2s steps(1) infinite;
+        }
+        @keyframes strobe {
+            0%, 100% { border-color: #ffe16d; }
+            50% { border-color: #77ff61; }
+        }
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface": "#131313",
+                    "inverse-primary": "#026e00",
+                    "on-surface": "#e5e2e1",
+                    "on-primary-container": "#027100",
+                    "error-container": "#93000a",
+                    "surface-container-highest": "#353534",
+                    "on-background": "#e5e2e1",
+                    "surface-dim": "#131313",
+                    "surface-variant": "#353534",
+                    "outline-variant": "#3b4b35",
+                    "surface-container-low": "#1c1b1b",
+                    "on-tertiary-container": "#b42e00",
+                    "on-error-container": "#ffdad6",
+                    "inverse-on-surface": "#313030",
+                    "on-secondary-container": "#725f00",
+                    "secondary-fixed": "#ffe16d",
+                    "primary-fixed": "#77ff61",
+                    "tertiary-fixed": "#ffdbd1",
+                    "on-primary-fixed-variant": "#015300",
+                    "surface-container-high": "#2a2a2a",
+                    "secondary-fixed-dim": "#e9c400",
+                    "surface-tint": "#02e600",
+                    "primary-fixed-dim": "#02e600",
+                    "tertiary": "#fff7f5",
+                    "tertiary-container": "#ffd2c6",
+                    "secondary": "#fff9ef",
+                    "on-tertiary-fixed-variant": "#872000",
+                    "surface-bright": "#3a3939",
+                    "on-tertiary-fixed": "#3b0900",
+                    "primary": "#eaffde",
+                    "on-secondary-fixed-variant": "#544600",
+                    "on-surface-variant": "#b9ccaf",
+                    "on-secondary": "#3a3000",
+                    "tertiary-fixed-dim": "#ffb5a0",
+                    "surface-container-lowest": "#0e0e0e",
+                    "on-error": "#690005",
+                    "primary-container": "#00ff00",
+                    "on-primary": "#013a00",
+                    "surface-container": "#201f1f",
+                    "inverse-surface": "#e5e2e1",
+                    "on-tertiary": "#601400",
+                    "outline": "#84967c",
+                    "on-primary-fixed": "#002200",
+                    "on-secondary-fixed": "#221b00",
+                    "secondary-container": "#ffdb3c",
+                    "error": "#ffb4ab",
+                    "background": "#131313"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "margin-mobile": "16px",
+                    "gutter": "16px",
+                    "unit": "4px",
+                    "margin-desktop": "32px",
+                    "container-max": "1280px"
+            },
+            "fontFamily": {
+                    "label-mono": ["Space Grotesk"],
+                    "headline-md": ["Anybody"],
+                    "headline-lg-mobile": ["Anybody"],
+                    "label-bold": ["Space Grotesk"],
+                    "body-lg": ["Plus Jakarta Sans"],
+                    "headline-xl": ["Anybody"],
+                    "body-md": ["Plus Jakarta Sans"],
+                    "headline-lg": ["Anybody"]
+            },
+            "fontSize": {
+                    "label-mono": ["12px", {"lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                    "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "700"}],
+                    "headline-lg-mobile": ["32px", {"lineHeight": "1.2", "fontWeight": "800"}],
+                    "label-bold": ["14px", {"lineHeight": "1", "fontWeight": "700"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "headline-xl": ["64px", {"lineHeight": "1.1", "letterSpacing": "-0.04em", "fontWeight": "900"}],
+                    "body-md": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "headline-lg": ["40px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "800"}]
+            }
+          },
+        },
+      }
+    </script>
+</head>
+<body class="bg-surface text-on-surface selection:bg-primary-container selection:text-on-primary-container overflow-hidden">
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-8 h-16 bg-surface dark:bg-surface border-b-2 border-outline-variant dark:border-outline-variant shadow-[4px_4px_0px_0px_#02e600]">
+<div class="flex items-center gap-8">
+<span class="font-headline-md text-headline-md text-primary-fixed dark:text-primary-fixed uppercase tracking-tighter italic">MEME STUDIO</span>
+<nav class="hidden md:flex items-center gap-6">
+<a class="font-label-bold text-label-bold text-on-surface-variant font-medium hover:text-primary-fixed hover:bg-surface-container-highest transition-all duration-100 px-3 py-1" href="#">Projects</a>
+<a class="font-label-bold text-label-bold text-on-surface-variant font-medium hover:text-primary-fixed hover:bg-surface-container-highest transition-all duration-100 px-3 py-1" href="#">Assets</a>
+<a class="font-label-bold text-label-bold text-on-surface-variant font-medium hover:text-primary-fixed hover:bg-surface-container-highest transition-all duration-100 px-3 py-1" href="#">Market</a>
+<a class="font-label-bold text-label-bold text-on-surface-variant font-medium hover:text-primary-fixed hover:bg-surface-container-highest transition-all duration-100 px-3 py-1" href="#">Learn</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="font-label-bold text-label-bold bg-surface-container-highest text-on-surface px-6 py-2 border-2 border-outline hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none transition-all duration-100">RENDER</button>
+<button class="font-label-bold text-label-bold bg-primary-fixed text-on-primary px-6 py-2 border-2 border-black shadow-[4px_4px_0px_0px_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all duration-100">MINT NFT</button>
+</div>
+</header>
+<!-- SideNavBar -->
+<aside class="fixed left-0 top-16 h-[calc(100vh-64px)] w-64 bg-surface-container-lowest dark:bg-surface-container-lowest border-r-2 border-outline-variant dark:border-outline-variant flex flex-col p-4 z-40">
+<div class="flex items-center gap-3 mb-8 px-2">
+<div class="w-10 h-10 bg-secondary-container border-2 border-black flex items-center justify-center">
+<span class="material-symbols-outlined text-on-secondary-container">face</span>
+</div>
+<div>
+<div class="font-label-bold text-label-bold text-secondary-fixed">ALPHA BUILD</div>
+<div class="font-label-mono text-[10px] text-on-surface-variant">v4.2.0-LFG</div>
+</div>
+</div>
+<div class="flex flex-col gap-2 flex-grow">
+<button class="flex items-center gap-3 p-3 font-label-mono text-label-mono text-on-surface-variant hover:text-primary-fixed hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined" data-icon="view_in_ar">view_in_ar</span>
+<span>Viewport</span>
+</button>
+<button class="flex items-center gap-3 p-3 font-label-mono text-label-mono bg-primary-container text-on-primary-container border-2 border-primary-fixed shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] scale-95 duration-75">
+<span class="material-symbols-outlined" data-icon="account_tree">account_tree</span>
+<span>Node Graph</span>
+</button>
+<button class="flex items-center gap-3 p-3 font-label-mono text-label-mono text-on-surface-variant hover:text-primary-fixed hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined" data-icon="texture">texture</span>
+<span>Materials</span>
+</button>
+<button class="flex items-center gap-3 p-3 font-label-mono text-label-mono text-on-surface-variant hover:text-primary-fixed hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined" data-icon="list_alt">list_alt</span>
+<span>Outliner</span>
+</button>
+<button class="flex items-center gap-3 p-3 font-label-mono text-label-mono text-on-surface-variant hover:text-primary-fixed hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined" data-icon="schedule">schedule</span>
+<span>Timeline</span>
+</button>
+<button class="flex items-center gap-3 p-3 font-label-mono text-label-mono text-on-surface-variant hover:text-primary-fixed hover:bg-surface-container-high transition-colors">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>Settings</span>
+</button>
+<button class="mt-4 mx-2 p-3 bg-secondary-container border-2 border-black font-label-bold text-label-bold text-on-secondary-container shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all">
+                ADD NODE
+            </button>
+</div>
+<div class="border-t border-outline-variant pt-4 flex flex-col gap-2">
+<button class="flex items-center gap-3 p-2 font-label-mono text-label-mono text-on-surface-variant hover:text-primary-fixed">
+<span class="material-symbols-outlined" data-icon="help">help</span>
+<span>Docs</span>
+</button>
+<button class="flex items-center gap-3 p-2 font-label-mono text-label-mono text-on-surface-variant hover:text-primary-fixed">
+<span class="material-symbols-outlined" data-icon="forum">forum</span>
+<span>Support</span>
+</button>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-64 mt-16 h-[calc(100vh-64px)] relative overflow-hidden bg-surface node-canvas">
+<!-- SVG Connections Layer -->
+<svg class="absolute inset-0 w-full h-full pointer-events-none">
+<path class="noodle-path opacity-60" d="M 240 220 C 340 220, 360 380, 460 380" fill="none" stroke="#77ff61" stroke-width="3"></path>
+<path class="noodle-path opacity-60" d="M 660 380 C 760 380, 780 250, 880 250" fill="none" stroke="#ffe16d" stroke-width="3"></path>
+<path class="noodle-path opacity-40" d="M 240 450 C 340 450, 360 410, 460 410" fill="none" stroke="#77ff61" stroke-width="3"></path>
+</svg>
+<!-- Node 1: Doge Logic -->
+<div class="absolute left-40 top-40 w-64 bg-surface-container border-2 border-black shadow-[8px_8px_0px_0px_#02e600] node-glow transition-all duration-200">
+<div class="bg-primary-fixed p-2 flex justify-between items-center border-b-2 border-black">
+<span class="font-label-bold text-label-bold text-on-primary uppercase italic">Doge Logic</span>
+<span class="material-symbols-outlined text-[18px]">more_vert</span>
+</div>
+<div class="p-4 flex flex-col gap-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-primary-fixed shadow-[0_0_8px_#02e600]"></div>
+<span class="font-label-mono text-[10px]">WOW_INPUT</span>
+</div>
+</div>
+<div class="space-y-2 py-2">
+<label class="font-label-mono text-[10px] text-on-surface-variant block uppercase">Much Smoothness</label>
+<input class="w-full accent-primary-fixed bg-surface-container-highest h-1 border border-outline-variant appearance-none" type="range"/>
+</div>
+<div class="flex items-center justify-between">
+<span class="font-label-mono text-[10px] text-on-surface-variant">SUCH_OUTPUT</span>
+<div class="w-3 h-3 rounded-full bg-primary-fixed shadow-[0_0_8px_#02e600]"></div>
+</div>
+</div>
+</div>
+<!-- Node 2: Stonks Generator -->
+<div class="absolute left-[460px] top-[300px] w-72 bg-surface-container border-2 border-black shadow-[8px_8px_0px_0px_#ffe16d] node-glow transition-all duration-200">
+<div class="bg-secondary-container p-2 flex justify-between items-center border-b-2 border-black">
+<span class="font-label-bold text-label-bold text-on-secondary-container uppercase italic">Stonks Generator</span>
+<span class="material-symbols-outlined text-[18px]">show_chart</span>
+</div>
+<div class="p-4 flex flex-col gap-4">
+<div class="flex gap-4">
+<div class="flex-1">
+<div class="flex items-center gap-2 mb-2">
+<div class="w-3 h-3 rounded-full bg-secondary-fixed shadow-[0_0_8px_#ffe16d]"></div>
+<span class="font-label-mono text-[10px]">ALPHA_IN</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-secondary-fixed shadow-[0_0_8px_#ffe16d]"></div>
+<span class="font-label-mono text-[10px]">BETA_IN</span>
+</div>
+</div>
+<div class="flex-1 flex flex-col items-end">
+<div class="flex items-center gap-2 mb-2">
+<span class="font-label-mono text-[10px]">PROFIT_OUT</span>
+<div class="w-3 h-3 rounded-full bg-secondary-fixed shadow-[0_0_8px_#ffe16d]"></div>
+</div>
+</div>
+</div>
+<div class="h-12 bg-black border border-outline-variant p-1 overflow-hidden relative">
+<div class="absolute inset-0 bg-gradient-to-t from-[#02e60022] to-transparent opacity-50"></div>
+<div class="w-full h-full flex items-end gap-[1px]">
+<div class="bg-primary-fixed w-1 h-2"></div>
+<div class="bg-primary-fixed w-1 h-4"></div>
+<div class="bg-primary-fixed w-1 h-3"></div>
+<div class="bg-primary-fixed w-1 h-6"></div>
+<div class="bg-primary-fixed w-1 h-8"></div>
+<div class="bg-primary-fixed w-1 h-5"></div>
+<div class="bg-primary-fixed w-1 h-9"></div>
+<div class="bg-primary-fixed w-1 h-[40px]"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Node 3: Texture Mapper -->
+<div class="absolute left-[880px] top-[180px] w-64 bg-surface-container border-2 border-black shadow-[8px_8px_0px_0px_#ffdad6] node-glow transition-all duration-200">
+<div class="bg-error-container p-2 flex justify-between items-center border-b-2 border-black">
+<span class="font-label-bold text-label-bold text-on-error-container uppercase italic">Texture Mapper</span>
+<span class="material-symbols-outlined text-[18px]">texture</span>
+</div>
+<div class="p-4 space-y-4">
+<div class="aspect-square bg-black border-2 border-outline-variant overflow-hidden group">
+<div class="w-full h-full relative">
+<img class="w-full h-full object-cover opacity-80" data-alt="A high-contrast glitchy cyberpunk texture with neon green lines and distorted static patterns, matching the brutalist meme aesthetic. The texture feels grainy, industrial, and high-energy." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDS12RKmBftmDMSsq5ya_uDI2eTe7wuVVZNIYIyMoAiykENr36k25D4T5ZIQker3kK8XNzUUuQOHMZXo0QzmFB8ILQSDr804XAOqGCbLxf7ghEQm7lkLWStRWPUBEVMR7gp86uHo2kSIBH7tVsfeH7ulg67AMDWFRdH8EAzTY-yDz2wqfVmHwZNSWXsfVH5ShvDxHK7bSp9xS_STi1fMeKaONeaQgx-nIhr5TMdocoXp-4thW2If-cao8FRID4d82jYMull5JiehCw"/>
+<div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/60">
+<span class="font-label-mono text-[10px] text-primary-fixed">SELECT ASSET</span>
+</div>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-3 h-3 rounded-full bg-error shadow-[0_0_8px_#ffb4ab]"></div>
+<span class="font-label-mono text-[10px]">MAP_UV</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="font-label-mono text-[10px]">PIXELS</span>
+<div class="w-3 h-3 rounded-full bg-error shadow-[0_0_8px_#ffb4ab]"></div>
+</div>
+</div>
+</div>
+</div>
+<!-- Floating UI / Bottom Controls -->
+<div class="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 px-6 py-3 bg-surface-container-high border-2 border-black shadow-[4px_4px_0px_0px_#000] z-50">
+<button class="p-2 hover:bg-surface-container-highest text-on-surface-variant hover:text-primary-fixed transition-colors">
+<span class="material-symbols-outlined">zoom_in</span>
+</button>
+<button class="p-2 hover:bg-surface-container-highest text-on-surface-variant hover:text-primary-fixed transition-colors">
+<span class="material-symbols-outlined">zoom_out</span>
+</button>
+<div class="h-6 w-[2px] bg-outline-variant mx-2"></div>
+<button class="p-2 hover:bg-surface-container-highest text-on-surface-variant hover:text-primary-fixed transition-colors">
+<span class="material-symbols-outlined">center_focus_strong</span>
+</button>
+<button class="p-2 hover:bg-surface-container-highest text-on-surface-variant hover:text-primary-fixed transition-colors">
+<span class="material-symbols-outlined">grid_on</span>
+</button>
+<div class="h-6 w-[2px] bg-outline-variant mx-2"></div>
+<span class="font-label-mono text-[12px] text-primary-fixed px-2">SCALE: 100%</span>
+</div>
+<!-- UI Overlays: Context Status -->
+<div class="absolute top-8 right-8 flex flex-col gap-4">
+<div class="bg-surface-container p-4 border-2 border-primary-fixed neon-strobe w-48 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+<div class="font-label-bold text-[10px] text-primary-fixed uppercase mb-1">Status: Giga-Compute</div>
+<div class="w-full h-2 bg-black border border-outline-variant overflow-hidden">
+<div class="h-full bg-primary-fixed transition-all duration-300" id="loading-bar" style="width: 69%;"></div>
+</div>
+<div class="font-label-mono text-[9px] text-on-surface-variant mt-2 text-right">69% LFG...</div>
+</div>
+<div class="bg-black/80 backdrop-blur-sm p-3 border-2 border-secondary-fixed w-48">
+<div class="flex justify-between items-center mb-2">
+<span class="font-label-bold text-[10px] text-secondary-fixed">REAL-TIME MEME FEED</span>
+<span class="w-2 h-2 rounded-full bg-secondary-fixed animate-pulse"></span>
+</div>
+<div class="space-y-1">
+<div class="font-label-mono text-[8px] text-on-surface-variant truncate">&gt; Generating Pepes...</div>
+<div class="font-label-mono text-[8px] text-primary-fixed truncate">&gt; Node: Stonks connected</div>
+<div class="font-label-mono text-[8px] text-on-surface-variant truncate">&gt; FOMO Level: CRITICAL</div>
+</div>
+</div>
+</div>
+<div class="absolute left-[600px] top-[150px] z-50">
+<div class="w-56 bg-surface-container-lowest border-2 border-primary-fixed shadow-[4px_4px_0px_0px_#02e600] flex flex-col font-headline-md">
+<div class="bg-primary-fixed text-on-primary-fixed px-3 py-1 text-[10px] font-label-bold uppercase flex justify-between items-center">
+<span>[NODE_LOGIC]</span>
+<span class="material-symbols-outlined text-xs">bolt</span>
+</div>
+<button class="flex items-center justify-between px-4 py-2 hover:bg-primary-container hover:text-on-primary-container text-on-surface-variant transition-colors text-left group">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-lg">account_tree</span>
+<span class="font-label-mono text-label-mono uppercase">ADD_LOGIC_GATE</span>
+</div>
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+<button class="flex items-center justify-between px-4 py-2 hover:bg-primary-container hover:text-on-primary-container text-on-surface-variant transition-colors text-left group">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-lg">calculate</span>
+<span class="font-label-mono text-label-mono uppercase">MATH_OPERATOR</span>
+</div>
+<span class="material-symbols-outlined text-sm">chevron_right</span>
+</button>
+<button class="flex items-center gap-3 px-4 py-2 hover:bg-primary-container hover:text-on-primary-container text-on-surface-variant transition-colors text-left group">
+<span class="material-symbols-outlined text-lg">show_chart</span>
+<span class="font-label-mono text-label-mono uppercase">STONKS_GENERATOR</span>
+</button>
+<button class="flex items-center gap-3 px-4 py-2 hover:bg-primary-container hover:text-on-primary-container text-on-surface-variant transition-colors text-left group">
+<span class="material-symbols-outlined text-lg">link</span>
+<span class="font-label-mono text-label-mono uppercase">SYNC_TO_CHAIN</span>
+</button>
+<div class="h-[1px] bg-outline-variant mx-2 my-1"></div>
+<button class="flex items-center gap-3 px-4 py-2 hover:bg-primary-container hover:text-on-primary-container text-on-surface-variant transition-colors text-left group">
+<span class="material-symbols-outlined text-lg">content_copy</span>
+<span class="font-label-mono text-label-mono uppercase">DUPLICATE_NODE</span>
+</button>
+<button class="flex items-center gap-3 px-4 py-2 hover:bg-error hover:text-on-error text-error transition-colors text-left group">
+<span class="material-symbols-outlined text-lg">delete_forever</span>
+<span class="font-label-mono text-label-mono uppercase">DELETE_NODE</span>
+</button>
+<div class="bg-surface-container-highest px-3 py-2 text-[8px] text-outline text-center border-t border-outline-variant font-label-mono">
+            SEND IT TO THE MOON 🚀
+        </div>
+</div>
+</div></main>
+<!-- Micro-interaction Scripts -->
+<script>
+        // Simple loading bar animation
+        const bar = document.getElementById('loading-bar');
+        setInterval(() => {
+            let width = parseInt(bar.style.width);
+            width = width >= 100 ? 0 : width + Math.floor(Math.random() * 5);
+            bar.style.width = width + '%';
+        }, 800);
+
+        // Simple draggable emulation (visual only for this prototype)
+        document.querySelectorAll('.node-glow').forEach(node => {
+            node.addEventListener('mousedown', (e) => {
+                node.style.zIndex = "100";
+                node.classList.add('ring-4', 'ring-primary-fixed/20');
+            });
+            document.addEventListener('mouseup', () => {
+                node.style.zIndex = "10";
+                node.classList.remove('ring-4', 'ring-primary-fixed/20');
+            });
+        });
+    </script>
+</body></html>

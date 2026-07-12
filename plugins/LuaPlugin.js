@@ -3,6 +3,8 @@
  * Allows users to write Lua scripts that control object behavior.
  */
 import * as THREE from 'three';
+import { logger } from '../core/Logger.js';
+import { createNodeCard } from './NodeFactory.js';
 
 export const LuaPlugin = {
   name: 'Lua',
@@ -28,9 +30,9 @@ export const LuaPlugin = {
       // const fengari = await import('fengari-web');
       // this._wasmModule = fengari;
       this._isInitialized = true;
-      console.log('[Lua] Fengari Wasm initialized');
+      logger.log('Lua', 'Fengari Wasm initialized');
     } catch (err) {
-      console.error('[Lua] Failed to initialize Fengari:', err);
+      logger.error('Lua', 'Failed to initialize Fengari:', err);
     }
   },
 
@@ -41,7 +43,7 @@ export const LuaPlugin = {
         Math: THREE.MathUtils
       },
       console: {
-        log: (...args) => console.log('[Lua]', ...args)
+        log: (...args) => logger.log('Lua', ...args)
       }
     };
   },
@@ -69,14 +71,14 @@ export const LuaPlugin = {
       
       if (status !== 0) {
         const error = this._wasmModule.lua_tostring(luaState, -1);
-        console.error('[Lua] Script error:', error);
+        logger.error('Lua', 'Script error:', error);
         this._wasmModule.lua_pop(luaState, 1);
       } else {
         // Read back modified context
         this._readContext(luaState, object);
       }
     } catch (err) {
-      console.error('[Lua] Execution failed:', err);
+      logger.error('Lua', 'Execution failed:', err);
     }
   },
 
@@ -193,13 +195,13 @@ export const LuaPlugin = {
       
       if (status !== 0) {
         const error = this._wasmModule.lua_tostring(L, -1);
-        console.error('[Lua] Compilation error:', error);
+        logger.error('Lua', 'Compilation error:', error);
         return null;
       }
       
       return L;
     } catch (err) {
-      console.error('[Lua] Compilation failed:', err);
+      logger.error('Lua', 'Compilation failed:', err);
       return null;
     }
   },
@@ -215,42 +217,36 @@ export const LuaPlugin = {
 
   nodes: {
     'Lua/ExecuteScriptNode': (x, y) => {
-      const el = document.createElement('div');
-      el.className = 'shader-node';
-      el.style.left = `${x}px`;
-      el.style.top = `${y}px`;
-      el.innerHTML = `
-        <div class="node-header">📜 Execute Lua Script</div>
-        <div class="node-inputs">
-          <span data-type="Object" data-prop="target">Target Object</span>
-        </div>
-        <div class="node-body">
-          <label>Script:</label>
-          <textarea class="node-input" data-prop="script" rows="4" placeholder="-- ctx.self.position.y = ctx.self.position.y + ctx.dt">
-ctx.self.position.y = ctx.self.position.y + ctx.dt
-          </textarea>
-        </div>
-        <div class="node-outputs">
-          <span data-type="Object">Modified Object</span>
-        </div>
-      `;
-      return el;
+      const textarea = document.createElement('textarea');
+      textarea.className = 'node-input';
+      textarea.dataset.prop = 'script';
+      textarea.rows = 4;
+      textarea.placeholder = '-- ctx.self.position.y = ctx.self.position.y + ctx.dt';
+      textarea.textContent = 'ctx.self.position.y = ctx.self.position.y + ctx.dt';
+
+      const label = document.createElement('label');
+      label.textContent = 'Script:';
+      const wrapper = document.createElement('div');
+      wrapper.appendChild(label);
+      wrapper.appendChild(textarea);
+
+      return createNodeCard(
+        x, y,
+        '📜 Execute Lua Script',
+        ['Target Object'],
+        ['Modified Object'],
+        { body: wrapper, extraClasses: ['node-card-yellow'] }
+      );
     },
 
     'Lua/StateNode': (x, y) => {
-      const el = document.createElement('div');
-      el.className = 'shader-node';
-      el.style.left = `${x}px`;
-      el.style.top = `${y}px`;
-      el.innerHTML = `
-        <div class="node-header">🔧 Lua State</div>
-        <div class="node-outputs">
-          <span data-type="Float">ctx.dt (Delta Time)</span>
-          <span data-type="Float">ctx.time (Elapsed)</span>
-          <span data-type="Vec3">ctx.self.position</span>
-        </div>
-      `;
-      return el;
+      return createNodeCard(
+        x, y,
+        '🔧 Lua State',
+        [],
+        ['dt (Delta Time)', 'time (Elapsed)', 'self.position'],
+        { extraClasses: ['node-card-yellow'] }
+      );
     }
   }
 };

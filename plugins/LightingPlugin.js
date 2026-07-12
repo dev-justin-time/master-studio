@@ -4,6 +4,7 @@
  */
 import * as THREE from 'three';
 import { createNodeCard } from './NodeFactory.js';
+import { logger } from '../core/Logger.js';
 
 export const LightingPlugin = {
   name: 'Lighting',
@@ -18,7 +19,7 @@ export const LightingPlugin = {
     this._state = state;
     const renderer = state.data.renderer;
     if (!renderer) {
-      console.warn('[LightingPlugin] No renderer in state — PMREMGenerator skipped');
+      logger.warn('LightingPlugin', 'No renderer in state — PMREMGenerator skipped');
       this._initDefaultPresets();
       return;
     }
@@ -78,7 +79,7 @@ export const LightingPlugin = {
         light = new THREE.AmbientLight(color, intensity);
         break;
       default:
-        console.warn(`[LightingPlugin] Unknown light type: ${type}`);
+        logger.warn(`[LightingPlugin] Unknown light type: ${type}`);
         return null;
     }
 
@@ -135,7 +136,7 @@ export const LightingPlugin = {
       this._state.emit('lighting:hdri:loaded', { url, intensity });
       return envMap;
     } catch (err) {
-      console.error('[LightingPlugin] Failed to load HDRI:', err);
+      logger.error('LightingPlugin', 'Failed to load HDRI:', err);
       return null;
     }
   },
@@ -143,7 +144,7 @@ export const LightingPlugin = {
   applyPreset(presetName) {
     const preset = this._lightPresets.get(presetName);
     if (!preset) {
-      console.warn(`[LightingPlugin] Unknown preset: ${presetName}`);
+      logger.warn('LightingPlugin', `Unknown preset: ${presetName}`);
       return;
     }
 

@@ -1,3 +1,4 @@
+import { logger } from '../core/Logger.js';
 /**
  * LuaBridge - Sandboxed per-object scripting via Fengari (Lua Wasm).
  */
@@ -8,7 +9,7 @@ export const LuaBridge = {
     if (!targetObject || !scriptCode) return;
 
     // In production, this uses Fengari Wasm to run the Lua code safely
-    console.log(`[Lua Sandbox] Executing script on ${targetObject.name} (dt: ${deltaTime})`);
+    logger.log(`[Lua Sandbox] Executing script on ${targetObject.name} (dt: ${deltaTime})`);
 
     /*
     const L = this._getOrCreateState(targetObject.uuid);

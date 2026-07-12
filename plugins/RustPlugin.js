@@ -4,6 +4,7 @@
  */
 import * as THREE from 'three';
 import { RustGeometryBridge } from '../bindings/WasmBridge.js';
+import { logger } from '../core/Logger.js';
 
 export const RustPlugin = {
   name: 'Rust',
@@ -30,9 +31,9 @@ export const RustPlugin = {
       // degrades if the Wasm binary is unavailable.
       this._wasmModule = RustGeometryBridge;
       this._isInitialized = true;
-      console.log('[Rust] Wasm bridge initialized');
+      logger.log('Rust', 'Wasm bridge initialized');
     } catch (err) {
-      console.error('[Rust] Failed to initialize Wasm bridge:', err);
+      logger.error('Rust', 'Failed to initialize Wasm bridge:', err);
     }
   },
 
@@ -41,14 +42,14 @@ export const RustPlugin = {
    */
   async booleanCSG(meshA, meshB, operation) {
     if (!this._isInitialized) {
-      console.warn('[Rust] Wasm not initialized');
+      logger.warn('Rust', 'Wasm not initialized');
       return null;
     }
 
     const result = await this._wasmModule.computeBoolean(meshA, meshB, operation);
 
     if (!result || !result.positions) {
-      console.warn('[Rust] CSG operation returned no result');
+      logger.warn('Rust', 'CSG operation returned no result');
       return null;
     }
 
@@ -72,7 +73,7 @@ export const RustPlugin = {
     const result = await this._wasmModule.decimateMesh(mesh, targetPercent);
 
     if (!result || !result.positions) {
-      console.warn('[Rust] Decimation returned no result');
+      logger.warn('Rust', 'Decimation returned no result');
       return null;
     }
 

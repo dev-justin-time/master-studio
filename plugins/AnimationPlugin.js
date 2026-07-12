@@ -6,6 +6,7 @@
  */
 import * as THREE from 'three';
 import { createNodeCard } from './NodeFactory.js';
+import { logger } from '../core/Logger.js';
 
 export const AnimationPlugin = {
   name: 'AnimationPlugin',
@@ -15,7 +16,7 @@ export const AnimationPlugin = {
     state.on('state:selectedObject:changed', obj => {
       this._activeMixer = obj ? state.data.mixers.get(obj.uuid) : null;
     });
-    console.log('[AnimationPlugin] Initialized');
+    logger.log('AnimationPlugin', 'Initialized');
   },
 
   update(deltaTime) {

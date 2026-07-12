@@ -5,267 +5,436 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Master Studio</title>
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+    @import url('https://fonts.googleapis.com/css2?family=Anybody:wght@400;700;800;900&family=Space+Grotesk:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500&display=swap');
+    /* ── Brutalist Skin v4.2.0 (Meme Studio integration) ── */
+    :root {
+      --bg: #131313;
+      --surface-container: #1c1b1b;
+      --surface-container-high: #2a2a2a;
+      --surface-container-highest: #353534;
+      --surface-lowest: #0e0e0e;
+      --primary-neon: #02e600;
+      --secondary-neon: #ffe16d;
+      --error-neon: #ffb4ab;
+      --on-surface: #e5e2e1;
+      --on-surface-variant: #b9ccaf;
+      --outline-variant: #3b4b35;
+      --border: #000;
     }
-
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-      background: #111;
-      color: #e0e0e0;
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--on-surface);
       overflow: hidden;
       height: 100vh;
       width: 100vw;
     }
-
     #app {
       display: flex;
       height: 100vh;
       width: 100vw;
     }
-
     /* ── Viewport ── */
     #viewport {
       flex: 1;
       position: relative;
     }
-
     #renderCanvas {
       display: block;
       width: 100%;
       height: 100%;
     }
-
-    /* ── Sidebar ── */
+    /* ── Brutalist Sidebar ── */
     #sidebar {
       width: 320px;
-      background: #1a1a1a;
-      border-left: 1px solid #333;
+      background: var(--surface-lowest);
+      border-left: 2px solid var(--primary-neon);
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      font-family: 'Space Grotesk', monospace;
+      box-shadow: -8px 0 0 0 var(--border);
     }
-
+    /* Brutalist alpha-build header */
     #sidebar-header {
-      padding: 16px;
-      border-bottom: 1px solid #333;
-      font-size: 14px;
-      font-weight: 600;
-      letter-spacing: 0.5px;
+      padding: 10px 14px;
+      background: var(--surface-container);
+      border-bottom: 2px solid var(--primary-neon);
+      display: flex;
+      align-items: center;
+      gap: 10px;
       text-transform: uppercase;
-      color: #888;
+      color: var(--secondary-neon);
+      letter-spacing: 0.05em;
+      font-weight: 700;
+      font-size: 11px;
+      box-shadow: 0 4px 0 0 var(--primary-neon);
     }
-
-    /* ── Node Graph Area ── */
-    #node-graph-area {
-      flex: 1;
-      overflow-y: auto;
-      padding: 8px;
+    #sidebar-header .ms-logo {
+      width: 32px;
+      height: 32px;
+      background: var(--secondary-neon);
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Anybody', sans-serif;
+      font-size: 18px;
+      color: var(--border);
+      font-weight: 900;
+      letter-spacing: -0.04em;
+      box-shadow: 2px 2px 0 0 var(--border);
+    }
+    #sidebar-header .ms-meta {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      flex: 1;
+      line-height: 1.15;
     }
-
+    #sidebar-header .ms-meta .ms-title {
+      color: var(--on-surface);
+      font-size: 11px;
+    }
+    #sidebar-header .ms-meta .ms-version {
+      color: var(--on-surface-variant);
+      font-size: 8px;
+      letter-spacing: 0.06em;
+    }
+    #sidebar-header .ms-pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 9999px;
+      background: var(--primary-neon);
+      box-shadow: 0 0 8px var(--primary-neon);
+    }
+    /* ── Node Graph Area (with overlay SVG noodle layer) ── */
+    #node-graph-area {
+      flex: 1;
+      position: relative;
+      overflow-y: auto;
+      padding: 16px;
+      background-color: var(--surface-lowest);
+      background-image:
+        radial-gradient(circle, var(--outline-variant) 1px, transparent 1px),
+        radial-gradient(circle, var(--outline-variant) 1px, transparent 1px);
+      background-size: 24px 24px;
+      background-position: 0 0, 12px 12px;
+    }
+    #node-graph-area > .noodle-layer {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+    }
+    #node-graph-area > .node-card,
+    #node-graph-area > .shader-node {
+      position: relative;
+      z-index: 1;
+    }
     #node-graph-area:empty::after {
-      content: 'No nodes in graph. Use "Add Node" below.';
-      color: #555;
-      font-size: 13px;
+      content: 'NO NODES IN GRAPH. CLICK "ADD NODE" BELOW.';
+      color: var(--on-surface-variant);
+      font-family: 'Space Grotesk', monospace;
+      font-size: 11px;
       text-align: center;
-      padding: 24px 16px;
+      padding: 32px 16px;
       display: block;
+      letter-spacing: 0.05em;
     }
-
-    /* ── Add Node Menu ── */
+    /* ── Add Node Panel ── */
     #add-node-panel {
-      border-top: 1px solid #333;
+      border-top: 2px solid var(--primary-neon);
       padding: 12px;
       max-height: 40%;
       overflow-y: auto;
+      background: var(--surface-container);
     }
-
     #add-node-panel h3 {
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.5px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
       text-transform: uppercase;
-      color: #888;
+      color: var(--secondary-neon);
       margin-bottom: 8px;
     }
-
     #add-node-menu {
       display: flex;
       flex-direction: column;
       gap: 2px;
     }
-
     .menu-category {
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 700;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.05em;
       text-transform: uppercase;
-      color: #666;
-      padding: 8px 8px 4px;
-      border-top: 1px solid #2a2a2a;
+      color: var(--secondary-neon);
+      padding: 8px 6px 4px;
+      border-top: 1px solid var(--outline-variant);
       margin-top: 4px;
     }
-
     .menu-category:first-child {
       border-top: none;
       margin-top: 0;
     }
-
     .menu-item {
-      padding: 8px 12px;
-      border-radius: 6px;
+      padding: 6px 10px;
       cursor: pointer;
-      font-size: 13px;
-      color: #ccc;
-      transition: background 0.15s, color 0.15s;
+      font-size: 11px;
+      color: var(--on-surface);
+      font-family: 'Space Grotesk', monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border: 2px solid transparent;
+      transition: background 0.1s, border-color 0.1s, transform 0.1s, box-shadow 0.1s;
     }
-
     .menu-item:hover {
-      background: #2a2a2a;
-      color: #fff;
+      background: var(--surface-lowest);
+      border-color: var(--primary-neon);
+      color: var(--primary-neon);
+      box-shadow: 2px 2px 0 0 var(--primary-neon);
     }
-
-    /* ── Toolbar ── */
+    /* ── Toolbar (brutalist) ── */
     #toolbar {
-      padding: 8px 16px;
-      border-top: 1px solid #333;
+      padding: 10px 14px;
+      border-top: 2px solid var(--primary-neon);
       display: flex;
+      flex-wrap: wrap;
       gap: 8px;
+      background: var(--surface-container);
     }
-
-    #toolbar button {
-      background: #2a2a2a;
-      border: 1px solid #444;
-      color: #ccc;
-      padding: 6px 14px;
-      border-radius: 5px;
+    #toolbar > button {
+      background: var(--surface-lowest);
+      border: 2px solid var(--border);
+      color: var(--on-surface);
+      padding: 6px 10px;
+      font-family: 'Space Grotesk', monospace;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
       cursor: pointer;
-      font-size: 12px;
-      font-weight: 500;
-      transition: background 0.15s, border-color 0.15s;
+      transition: transform 0.1s, box-shadow 0.1s, color 0.1s;
+      box-shadow: 2px 2px 0 0 var(--border);
     }
-
-    #toolbar button:hover {
-      background: #3a3a3a;
-      border-color: #555;
+    #toolbar > button:hover {
+      transform: translate(1px, 1px);
+      box-shadow: 1px 1px 0 0 var(--border);
+      color: var(--primary-neon);
     }
-
-    #toolbar button.active {
-      background: #4a9eff;
-      border-color: #4a9eff;
-      color: #fff;
+    #toolbar > button.active {
+      background: var(--primary-neon);
+      color: #013a00;
+      box-shadow: 2px 2px 0 0 var(--border);
     }
-
+    #toolbar > button:active {
+      transform: translate(2px, 2px);
+      box-shadow: none;
+    }
+    #sticky-indicator {
+      font-size: 10px;
+      color: var(--on-surface-variant);
+      padding: 6px;
+      align-self: center;
+      font-family: 'Space Grotesk', monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
     /* ── Drop Zone ── */
     #drop-zone {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+      top: 0; left: 0; width: 100%; height: 100%;
       display: none;
       align-items: center;
       justify-content: center;
-      background: rgba(0, 255, 136, 0.08);
-      border: 3px dashed #00ff88;
+      background: rgba(2, 230, 0, 0.08);
+      border: 3px dashed var(--primary-neon);
       z-index: 100;
       pointer-events: none;
     }
-
-    #drop-zone.active {
-      display: flex;
-    }
-
+    #drop-zone.active { display: flex; }
     #drop-zone-text {
-      color: #00ff88;
+      color: var(--primary-neon);
       font-size: 18px;
-      font-weight: 600;
+      font-weight: 700;
       pointer-events: none;
       text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-family: 'Space Grotesk', monospace;
     }
-
-    /* ── Node Cards ── */
-    .node-card {
-      background: #252525;
-      border: 1px solid #444;
-      border-radius: 8px;
-      padding: 10px 12px;
-      margin-bottom: 8px;
-      min-width: 180px;
-      font-size: 12px;
-      color: #ddd;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    /* ── Node Cards (brutalist — covers .node-card + .shader-node) ── */
+    .node-card, .shader-node {
+      background: var(--surface-container);
+      border: 2px solid var(--border);
+      box-shadow: 4px 4px 0 0 var(--primary-neon);
+      padding: 0;
+      margin-bottom: 14px;
+      min-width: 220px;
+      font-family: 'Space Grotesk', monospace;
+      user-select: none;
+      transition: transform 0.1s, box-shadow 0.1s;
+      border-radius: 0;
+      font-size: 11px;
+      color: var(--on-surface);
     }
-
-    .node-card .node-header {
+    .node-card:hover, .shader-node:hover {
+      box-shadow: 6px 6px 0 0 var(--primary-neon), 0 0 20px rgba(2, 230, 0, 0.4);
+      transform: translate(-1px, -1px);
+    }
+    /* Header — primary green by default */
+    .node-card > .node-header,
+    .shader-node > .node-header {
+      background: var(--primary-neon);
+      color: #013a00;
       font-weight: 700;
-      font-size: 12px;
-      letter-spacing: 0.3px;
-      margin-bottom: 8px;
-      color: #00ff88;
-      border-bottom: 1px solid #333;
-      padding-bottom: 4px;
+      font-size: 11px;
+      text-transform: uppercase;
+      padding: 6px 10px;
+      border-bottom: 2px solid var(--border);
+      letter-spacing: 0.04em;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
-
-    .node-card .node-body {
+    /* Yellow shadow variant for Rust/Go heavy nodes */
+    .node-card-yellow > .node-header {
+      background: var(--secondary-neon);
+      color: #3a3000;
+    }
+    /* Red shadow variant for error-related nodes */
+    .node-card-error > .node-header {
+      background: var(--error-neon);
+      color: #690005;
+    }
+    /* Input/output pins with traffic-light dots */
+    .node-inputs, .node-outputs {
+      padding: 6px 10px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .node-inputs { background: rgba(2, 230, 0, 0.04); border-bottom: 1px solid var(--outline-variant); }
+    .node-outputs { background: rgba(255, 225, 109, 0.04); }
+    .node-inputs .pin-row,
+    .node-outputs .pin-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .node-outputs .pin-row {
+      justify-content: flex-end;
+    }
+    .pin-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 9999px;
+      background: var(--primary-neon);
+      box-shadow: 0 0 6px var(--primary-neon);
+      flex-shrink: 0;
+      border: 1px solid var(--border);
+    }
+    .pin-dot.out {
+      background: var(--secondary-neon);
+      box-shadow: 0 0 6px var(--secondary-neon);
+    }
+    /* Body */
+    .node-card .node-body, .shader-node .node-body {
+      padding: 10px;
       display: flex;
       flex-direction: column;
       gap: 6px;
-      margin-bottom: 8px;
     }
-
-    .node-card .node-body label {
-      font-size: 11px;
-      color: #aaa;
+    .node-card .node-body label, .shader-node .node-body label {
+      font-size: 10px;
+      text-transform: uppercase;
+      color: var(--on-surface-variant);
+      letter-spacing: 0.05em;
+      font-family: 'Space Grotesk', monospace;
     }
-
-    .node-card .node-input {
-      background: #1a1a1a;
-      border: 1px solid #444;
-      border-radius: 4px;
-      color: #eee;
+    .node-card .node-input, .shader-node .node-input {
+      background: var(--surface-lowest);
+      border: 2px solid var(--outline-variant);
+      color: var(--on-surface);
       padding: 4px 6px;
       font-size: 11px;
+      font-family: 'Plus Jakarta Sans', system-ui;
       width: 100%;
+      border-radius: 0;
     }
-
-    .node-card .node-input:focus {
+    .node-card .node-input:focus, .shader-node .node-input:focus {
       outline: none;
-      border-color: #00ff88;
+      border-color: var(--primary-neon);
     }
-
-    .node-card .run-node-btn {
-      background: #2a4a3a;
-      border: 1px solid #00ff88;
-      color: #00ff88;
+    /* Run button (CTA — bright green) */
+    .run-node-btn {
+      background: var(--surface-lowest);
+      border: 2px solid var(--primary-neon);
+      color: var(--primary-neon);
       padding: 6px 10px;
-      border-radius: 5px;
+      font-weight: 700;
+      font-size: 10px;
+      text-transform: uppercase;
       cursor: pointer;
-      font-size: 11px;
-      font-weight: 600;
-      width: 100%;
-      transition: background 0.15s, color 0.15s;
+      letter-spacing: 0.05em;
+      transition: transform 0.1s, box-shadow 0.1s;
+      box-shadow: 2px 2px 0 0 var(--primary-neon);
+      margin: 4px 10px 10px;
+      font-family: 'Space Grotesk', monospace;
+      display: block;
+      width: calc(100% - 20px);
+      border-radius: 0;
     }
-
-    .node-card .run-node-btn:hover {
-      background: #00ff88;
-      color: #111;
+    .run-node-btn:hover {
+      transform: translate(1px, 1px);
+      box-shadow: 1px 1px 0 0 var(--primary-neon);
     }
-
-    .node-card .node-outputs {
-      margin-top: 8px;
-      padding-top: 8px;
-      border-top: 1px solid #333;
-      font-size: 11px;
-      color: #888;
+    .run-node-btn:active {
+      transform: translate(2px, 2px);
+      box-shadow: none;
+    }
+    /* ── State Debug (brutalist panel) ── */
+    #state-debug-panel {
+      border-top: 2px solid var(--primary-neon);
+      padding: 10px;
+      font-family: 'Space Grotesk', monospace;
+      font-size: 10px;
+      color: var(--on-surface-variant);
+      max-height: 160px;
+      overflow: hidden;
+      background: var(--surface-container);
+    }
+    #state-debug-toggle {
+      cursor: pointer;
+      color: var(--secondary-neon);
+      margin-bottom: 6px;
+      user-select: none;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+    #state-debug-body {
+      display: none;
+      line-height: 1.6;
+    }
+    #state-debug-body div span {
+      color: var(--on-surface);
+    }
+    /* Noodle path styling */
+    .noodle-path {
+      stroke-dasharray: 10;
+      animation: dash 30s linear infinite;
+    }
+    @keyframes dash {
+      to { stroke-dashoffset: -1000; }
     }
   </style>
-  <script type="module" crossorigin src="/assets/index-CagPSDpM.js"></script>
+  <script type="module" crossorigin src="/assets/MasterApp-C0VD3ELD.js"></script>
 </head>
 <body>
   <div id="app">
@@ -276,15 +445,27 @@
       <div id="drop-zone">
         <div id="drop-zone-text">Drop point cloud or CAD file here</div>
       </div>
-      <div id="controls-hint" style="position:absolute;bottom:12px;left:12px;font-size:11px;color:#555;font-family:monospace;pointer-events:none;z-index:5;">
+      <div id="controls-hint" style="position:absolute;bottom:12px;left:12px;font-size:11px;color:#3b4b35;font-family:'Space Grotesk',monospace;pointer-events:none;z-index:5;">
         <b>G</b> Move &nbsp; <b>R</b> Rotate &nbsp; <b>S</b> Scale &nbsp; <b>L</b> Lasso &nbsp; <b>T</b> Sticky &nbsp; <b>P</b> Debug &nbsp; <b>1-3</b> Color Select
       </div>
     </div>
 
-    <!-- Sidebar -->
+    <!-- Brutalist Sidebar -->
     <div id="sidebar">
-      <div id="sidebar-header">Node Graph</div>
-      <div id="node-graph-area"></div>
+      <div id="sidebar-header">
+        <div class="ms-logo">MS</div>
+        <div class="ms-meta">
+          <div class="ms-title">Node Editor</div>
+          <div class="ms-version">v4.2.0-alpha</div>
+        </div>
+        <div class="ms-pulse"></div>
+      </div>
+      <div id="node-graph-area">
+        <!-- SVG noodle layer (decorative — wires from NodeGraphExecutor could append paths here) -->
+        <svg class="noodle-layer" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none">
+          <path class="noodle-path" d="M 30 80 C 80 80, 100 200, 160 200" fill="none" stroke="#02e600" stroke-width="2" opacity="0.4"></path>
+        </svg>
+      </div>
 
       <div id="add-node-panel">
         <h3>Add Node</h3>
@@ -303,7 +484,7 @@
         <button id="btn-rotate" title="Rotate mode (R)">↻ Rotate</button>
         <button id="btn-scale" title="Scale mode (S)">⤢ Scale</button>
         <button id="btn-import" title="Import point cloud or CAD file">📥 Import</button>
-        <span id="sticky-indicator" style="font-size:10px;color:#888;padding:6px;align-self:center;">Sticky: OFF</span>
+        <span id="sticky-indicator">Sticky: OFF</span>
         <button id="btn-debug" title="Toggle physics debug overlay (P)">🐛 Debug</button>
       </div>
 
@@ -311,9 +492,9 @@
       <input type="file" id="import-file-input" accept=".las,.ply,.step,.iges,.stp,.igs" style="display:none;" />
 
       <!-- StateManager Debug Panel -->
-      <div id="state-debug-panel" style="border-top:1px solid #333;padding:10px;font-family:monospace;font-size:10px;color:#aaa;max-height:140px;overflow:hidden;">
-        <div id="state-debug-toggle" style="cursor:pointer;color:#666;margin-bottom:6px;user-select:none;">▸ State Debug</div>
-        <div id="state-debug-body" style="display:none;line-height:1.6;">
+      <div id="state-debug-panel">
+        <div id="state-debug-toggle">▾ State Debug</div>
+        <div id="state-debug-body">
           <div>FPS: <span id="dbg-fps">--</span></div>
           <div>Frame: <span id="dbg-frame">--</span>ms</div>
           <div>Memory: <span id="dbg-mem">--</span>MB</div>
@@ -321,7 +502,7 @@
           <div>Substeps: <span id="dbg-substeps">--</span></div>
           <div>Middleware: <span id="dbg-mw">--</span></div>
           <div>Buffer: <span id="dbg-buf">--</span></div>
-          <div style="color:#0f0;margin-top:2px;">Experts: <span id="dbg-experts">--</span></div>
+          <div style="color:var(--primary-neon);margin-top:2px;">Experts: <span id="dbg-experts">--</span></div>
           <div>Listeners: <span id="dbg-listeners">--</span></div>
         </div>
       </div>

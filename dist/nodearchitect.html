@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MEME STUDIO | Node Architect</title>
+
+  <!-- Tailwind CDN (parity with sibling brutalist pages) -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Anybody:wght@700;800;900&family=Plus+Jakarta+Sans:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+
+  <!-- Sibling brutalist CSS + refactored concern-based CSS -->
+  <script type="module" crossorigin src="/assets/nodeArchitect-CA_D11DV.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/MasterApp-C0VD3ELD.js">
+  <link rel="modulepreload" crossorigin href="/assets/scene-utils-LKyfqrNG.js">
+  <link rel="stylesheet" crossorigin href="/assets/nodeArchitect-BgyZCulE.css">
+  <link rel="stylesheet" crossorigin href="/assets/scene-DWZhsFtU.css">
+</head>
+<body class="bg-surface text-on-surface selection:bg-primary-container selection:text-on-primary overflow-hidden h-screen flex flex-col">
+
+  <!-- ── MODAL: THE NODE ARCHITECT (uses the refactored concern files) ────────── -->
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-md p-4" id="architect-modal">
+    <div class="relative w-full max-w-5xl bg-surface-container-lowest border border-primary-fixed/30 shadow-[0_0_40px_rgba(2,230,0,0.1)] overflow-hidden" id="architect-frame">
+
+      <div class="absolute top-6 right-16 z-10" id="signal-slot"></div>
+      <button class="absolute top-6 right-6 text-on-surface-variant hover:text-primary-fixed transition-colors" id="architect-close" aria-label="Close">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+
+      <div class="p-8 border-b border-outline/20">
+        <div class="flex items-baseline gap-4">
+          <h2 class="font-headline-md text-headline-md text-primary-fixed uppercase tracking-[0.2em]">THE NODE ARCHITECT</h2>
+          <span class="font-label-mono text-label-mono text-outline uppercase opacity-50">/ TYPE_MAP_ALPHA</span>
+        </div>
+      </div>
+
+      <!-- Body — three input nodes + central generator core -->
+      <div class="p-8 grid grid-cols-12 gap-8 relative min-h-[450px]" id="architect-graph">
+
+        <div class="col-span-5 space-y-12 py-4">
+          <div id="slot-string-input"></div>
+          <div id="slot-font-map"></div>
+          <div id="slot-scale-factor"></div>
+        </div>
+
+        <div class="col-span-7 flex items-center justify-center relative">
+          <div id="slot-gen-core" class="node-generator-core-host"></div>
+        </div>
+      </div>
+
+      <!-- Footer actions -->
+      <div class="p-6 bg-surface-container-lowest border-t border-outline/20 flex justify-between items-center">
+        <div class="flex items-center gap-8">
+          <div class="font-label-mono text-[10px] text-outline uppercase">
+            SYSTEM_LOAD: <span class="text-primary-fixed" id="status-load">—</span>
+          </div>
+          <div class="font-label-mono text-[10px] text-outline uppercase">
+            WIRES: <span class="text-primary-fixed" id="status-wires">0 ACTIVE</span>
+          </div>
+        </div>
+        <div class="flex gap-4">
+          <button id="architect-cancel" class="px-8 py-3 border border-outline/50 text-outline font-label-bold text-label-bold uppercase hover:border-primary-fixed hover:text-primary-fixed transition-all">
+            CANCEL
+          </button>
+          <button id="architect-wire" class="px-10 py-3 border border-primary-fixed bg-primary-fixed/5 text-primary-fixed font-label-bold text-label-bold uppercase tracking-widest hover:bg-primary-fixed hover:text-on-primary transition-all shadow-[0_0_20px_rgba(119,255,97,0.1)]">
+            [ WIRE TO SCENE ]
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── Project scaffolding (parity with sibling brutalist pages) ──────────── -->
+  <nav class="fixed top-0 w-full z-40 flex justify-between items-center px-8 h-16 bg-surface border-b-2 border-outline-variant shadow-[4px_4px_0px_0px_#02e600]">
+    <div class="flex items-center gap-8">
+      <a href="/index.html" class="font-headline-md text-headline-md text-primary-fixed uppercase tracking-tighter italic hover:opacity-80 transition-opacity">MEME STUDIO</a>
+      <a class="text-primary-fixed font-bold border-b-2 border-primary-fixed font-label-bold text-label-bold py-5" href="#">Node Architect</a>
+    </div>
+    <button class="bg-primary-container border-2 border-on-primary-container text-on-primary font-label-bold text-label-bold px-4 py-2 shadow-[4px_4px_0px_0px_#000000]">MINT NFT</button>
+  </nav>
+
+  <main class="flex flex-1 pt-16 overflow-hidden">
+    <aside class="fixed left-0 top-16 h-[calc(100vh-64px-32px)] w-64 bg-surface-container-lowest border-r-2 border-outline-variant flex flex-col p-4 z-30">
+      <div class="font-label-bold text-label-bold text-secondary-fixed mb-1 uppercase">ALPHA BUILD</div>
+      <div class="font-label-mono text-label-mono text-on-surface-variant opacity-60">v4.2.0-LFG</div>
+      <p class="font-label-mono text-[10px] text-outline mt-6">This page is a
+        <span class="text-primary-fixed">demo of the brutalist concern refactor</span>:
+        signal-indicator → node-socket → corner-pins → blueprint-bg,
+        string-input &middot; font-map &middot; scale-factor nodes,
+        generator-core-node central output, wire-system overlay, and
+        metrics-collector status feeds.
+      </p>
+    </aside>
+
+    <section class="flex-1 ml-64 relative bg-surface overflow-hidden">
+      <div id="viewport-stub" class="absolute inset-0 z-0" style="background-image: linear-gradient(to right, rgba(0,255,0,0.1) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,255,0,0.1) 1px, transparent 1px); background-size: 40px 40px; transform: perspective(1000px) rotateX(60deg) translateY(-200px) scale(2);"></div>
+      <div class="absolute top-4 left-4 z-10 px-4 py-2 bg-surface-container-highest/80 border-2 border-primary-fixed-dim text-primary-fixed font-label-mono text-label-mono backdrop-blur-md">
+        VIEWPORT: PERSPECTIVE (stub — this page demos the modal)
+      </div>
+    </section>
+  </main>
+
+
+</body>
+</html>

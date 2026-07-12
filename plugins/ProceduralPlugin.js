@@ -6,13 +6,14 @@
  */
 import * as THREE from 'three';
 import { createNodeCard } from './NodeFactory.js';
+import { logger } from '../core/Logger.js';
 
 export const ProceduralPlugin = {
   name: 'ProceduralPlugin',
 
   init(state) {
     this._state = state;
-    console.log('[ProceduralPlugin] Initialized');
+    logger.log('ProceduralPlugin', 'Initialized');
   },
 
   /** Generate a subdivided plane with noise displacement */
@@ -53,7 +54,7 @@ export const ProceduralPlugin = {
 
   /** Compute CSG boolean between two meshes (delegates to Rust Wasm) */
   computeBoolean(meshA, meshB, operation) {
-    console.log(`[ProceduralPlugin] CSG ${operation} on ${meshA?.name} + ${meshB?.name}`);
+    logger.log(`[ProceduralPlugin] CSG ${operation} on ${meshA?.name} + ${meshB?.name}`);
     // Handoff to Rust Wasm for heavy CSG math
     const result = window.RustGeometryBridge?.computeBoolean(meshA, meshB, operation);
     return result ?? meshA;

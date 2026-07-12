@@ -14,6 +14,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { createNodeCard } from './NodeFactory.js';
+import { logger } from '../core/Logger.js';
 
 export const PhotorealisticRenderPlugin = {
   name: 'PhotorealisticRender',
@@ -30,7 +31,7 @@ export const PhotorealisticRenderPlugin = {
     this._initComposer();
     this.applyPreset('preview');
 
-    console.log('[PhotorealisticRender] Pipeline initialized.');
+    logger.log('PhotorealisticRender', 'Pipeline initialized.');
   },
 
   update(deltaTime) {
@@ -48,7 +49,7 @@ export const PhotorealisticRenderPlugin = {
     const scene = this._state.data.scene;
     const camera = this._state.data.camera;
     if (!renderer || !scene || !camera) {
-      console.warn('[PhotorealisticRender] Missing renderer/scene/camera — composer skipped');
+      logger.warn('PhotorealisticRender', 'Missing renderer/scene/camera — composer skipped');
       return;
     }
 
@@ -94,7 +95,7 @@ export const PhotorealisticRenderPlugin = {
   applyPreset(presetName) {
     const preset = this._renderPresets.get(presetName);
     if (!preset) {
-      console.warn(`[PhotorealisticRender] Unknown preset: ${presetName}`);
+      logger.warn(`[PhotorealisticRender] Unknown preset: ${presetName}`);
       return;
     }
 
@@ -182,7 +183,7 @@ export const PhotorealisticRenderPlugin = {
 
   toggleRaytracing(enabled) {
     this._state.emit('rendering:raytracing:toggled', { enabled });
-    console.log(`[PhotorealisticRender] Raytracing ${enabled ? 'enabled' : 'disabled'} (experimental)`);
+    logger.log('PhotorealisticRender', `Raytracing ${enabled ? 'enabled' : 'disabled'} (experimental)`);
   },
 
   // ── Helpers ──
