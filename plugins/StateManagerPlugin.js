@@ -74,6 +74,12 @@ export const StateManagerPlugin = {
   emit(event, payload) {
     if (this._masterState && typeof this._masterState.emit === 'function') {
       this._masterState.emit(event, payload);
+    } else {
+      // In the current wiring this branch is unreachable (MasterApp
+      // always supplies a masterState bus before registering this
+      // plugin). A warn here makes future wiring bugs loud instead of
+      // mysterious "why is my toast silent?" debugging sessions.
+      logger.warn('StateManager', `emit("${event}") called but masterState bus is not available`);
     }
   },
 
