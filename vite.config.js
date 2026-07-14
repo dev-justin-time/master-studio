@@ -138,12 +138,17 @@ export default defineConfig({
     target: 'esnext',
     rollupOptions: {
       // Multi-page setup: index.html (Node Editor) + studio.html (Brutalist Editor)
+      // NOTE: do NOT register node.html here — it's a built dist artifact
+      // (its body hard-loads /assets/nodeArchitect-*.js bundles) and Adding
+      // it as an entry will roll up conflicting bundles on rebuild.
       input: {
         main: resolve(__dirname, 'index.html'),
         studio: resolve(__dirname, 'studio.html'),
         scene: resolve(__dirname, 'scene.html'),
         mainScene: resolve(__dirname, 'main.html'),
         nodeArchitect: resolve(__dirname, 'nodearchitect.html'),
+        usecase: resolve(__dirname, 'usecase.html'),
+        pipeline: resolve(__dirname, 'pipeline.html'),
       },
     },
   },

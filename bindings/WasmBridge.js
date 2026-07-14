@@ -10,6 +10,17 @@ let rustReady = false;
 let goReady = false;
 
 /**
+ * Synchronous readiness probe. Returns `{ rust, go }` booleans reflecting
+ * the actual Wasm load state (set inside `initWasmModules`).
+ *
+ * Prefer this over `typeof someBridgeFn === 'function'`, which always
+ * returns true regardless of whether the Wasm binary actually loaded.
+ */
+export function getWasmStatus() {
+  return { rust: rustReady, go: goReady };
+}
+
+/**
  * Initialize both Wasm modules. Called once during app startup.
  */
 export async function initWasmModules() {

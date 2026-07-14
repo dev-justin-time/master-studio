@@ -1,0 +1,564 @@
+Here's a complete, professional GUI system with organized dropdown menus and a comprehensive lighting/camera plugin:
+
+---
+
+## 1. Menu System Plugin (`plugins/MenuSystemPlugin.js`)
+
+```javascript
+/**
+ * MenuSystemPlugin - Professional menu bar system with organized dropdowns.
+ */
+export const MenuSystemPlugin = {
+  name: 'MenuSystem',
+  _state: null,
+  _menuBar: null,
+  _menus: new Map(),
+
+  init(state) {
+    this._state = state;
+    this._createMenuBar();
+    this._setupMenus();
+  },
+
+  _createMenuBar() {
+    this._menuBar = document.createElement('div');
+    this._menuBar.id = 'studio-menu-bar';
+    this._menuBar.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 32px;
+      background: #1a1a1a;
+      border-bottom: 1px solid #333;
+      display: flex;
+      align-items: center;
+      padding: 0 8px;
+      z-index: 10000;
+      font-family: system-ui, sans-serif;
+      font-size: 13px;
+    `;
+    document.body.appendChild(this._menuBar);
+    document.body.style.paddingTop = '32px';
+  },
+
+  _setupMenus() {
+    this._addMenu('File', [
+      { label: 'Import GLB/GLTF', shortcut: 'Ctrl+I', action: () => this._triggerImport() },
+      { label: 'Export GLB', shortcut: 'Ctrl+E', action: () => this._triggerExport('glb') },
+      { label: 'Export GLTF', action: () => this._triggerExport('gltf') },
+      { type: 'separator' },
+      { label: 'Save Scene', shortcut: 'Ctrl+S', action: () => this._saveScene() },
+      { label: 'Load Scene', shortcut: 'Ctrl+O', action: () => this._loadScene() },
+    ]);
+
+    this._addMenu('Edit', [
+      { label: 'Undo', shortcut: 'Ctrl+Z', action: () => this._undo() },
+      { label: 'Redo', shortcut: 'Ctrl+Shift+Z', action: () => this._redo() },
+      { type: 'separator' },
+      { label: 'Copy', shortcut: 'Ctrl+C', action: () => this._copy() },
+      { label: 'Paste', shortcut: 'Ctrl+V', action: () => this._paste() },
+      { label: 'Duplicate', shortcut: 'Ctrl+D', action: () => this._duplicate() },
+      { label: 'Delete', shortcut: 'Delete', action: () => this._delete() },
+      { type: 'separator' },
+      { label: 'Select All', shortcut: 'A', action: () => this._selectAll() },
+      { label: 'Deselect All', shortcut: 'Alt+A', action: () => this._deselectAll() },
+      { label: 'Invert Selection', shortcut: 'Ctrl+I', action: () => this._invertSelection() },
+    ]);
+
+    this._addMenu('Object', [
+      { label: 'Add Primitive', submenu: [
+        { label: 'Cube', action: () => this._addPrimitive('cube') },
+        { label: 'UV Sphere', action: () => this._addPrimitive('uvsphere') },
+        { label: 'Ico Sphere', action: () => this._addPrimitive('icosphere') },
+        { label: 'Cone', action: () => this._addPrimitive('cone') },
+        { label: 'Cylinder', action: () => this._addPrimitive('cylinder') },
+        { label: 'Torus', action: () => this._addPrimitive('torus') },
+        { label: 'Capsule', action: () => this._addPrimitive('capsule') },
+        { label: 'Plane', action: () => this._addPrimitive('plane') },
+        { label: 'Circle', action: () => this._addPrimitive('circle') },
+        { label: 'Triangle', action: () => this._addPrimitive('triangle') },
+        { label: 'Pyramid', action: () => this._addPrimitive('pyramid') },
+      ]},
+      { type: 'separator' },
+      { label: 'Add Modifier', submenu: [
+        { label: 'Bevel', action: () => this._addModifier('bevel') },
+        { label: 'Array', action: () => this._addModifier('array') },
+        { label: 'Screw', action: () => this._addModifier('screw') },
+        { label: 'Bend', action: () => this._addModifier('bend') },
+      ]},
+      { type: 'separator' },
+      { label: 'Group', shortcut: 'Ctrl+G', action: () => this._group() },
+      { label: 'Ungroup', shortcut: 'Ctrl+Shift+G', action: () => this._ungroup() },
+      { label: 'Join', shortcut: 'Ctrl+J', action: () => this._join() },
+    ]);
+
+    this._addMenu('View', [
+      { label: 'Camera Views', submenu: [
+        { label: 'Perspective', shortcut: '5', action: () => this._setCameraView('perspective') },
+        { label: 'Top', shortcut: '7', action: () => this._setCameraView('top') },
+        { label: 'Front', shortcut: '1', action: () => this._setCameraView('front') },
+        { label: 'Right', shortcut: '3', action: () => this._setCameraView('right') },
+        { type: 'separator' },
+        { label: 'Reset View', shortcut: 'Home', action: () => this._resetView() },
+        { label: 'Frame Selected', shortcut: 'F', action: () => this._frameSelected() },
+        { label: 'Frame All', shortcut: 'Shift+F', action: () => this._frameAll() },
+      ]},
+      { type: 'separator' },
+      { label: 'Lighting Presets', submenu: [
+        { label: 'Studio', action: () => this._applyLightingPreset('studio') },
+        { label: 'Outdoor Daylight', action: () => this._applyLightingPreset('outdoor') },
+        { label: 'Night Scene', action: () => this._applyLightingPreset('night') },
+        { label: 'Dramatic', action: () => this._applyLightingPreset('dramatic') },
+      ]},
+      { type: 'separator' },
+      { label: 'Toggle Grid', shortcut: 'G', action: () => this._toggleGrid() },
+      { label: 'Toggle Gizmo', shortcut: 'Ctrl+Space', action: () => this._toggleGizmo() },
+    ]);
+
+    this._addMenu('Tools', [
+      { label: 'Select', shortcut: 'Q', action: () => this._setTool('select') },
+      { label: 'Move', shortcut: 'W', action: () => this._setTool('translate') },
+      { label: 'Rotate', shortcut: 'E', action: () => this._setTool('rotate') },
+      { label: 'Scale', shortcut: 'R', action: () => this._setTool('scale') },
+      { type: 'separator' },
+      { label: 'Box Select', shortcut: 'B', action: () => this._setTool('box-select') },
+      { label: 'Lasso Select', action: () => this._setTool('lasso') },
+    ]);
+
+    this._addMenu('Render', [
+      { label: 'Quality Presets', submenu: [
+        { label: 'Draft', action: () => this._setRenderPreset('draft') },
+        { label: 'Preview', action: () => this._setRenderPreset('preview') },
+        { label: 'Production', action: () => this._setRenderPreset('production') },
+        { label: 'Cinematic', action: () => this._setRenderPreset('cinematic') },
+      ]},
+      { type: 'separator' },
+      { label: 'Screenshot', shortcut: 'F12', action: () => this._captureScreenshot() },
+      { label: 'Toggle Raytracing', action: () => this._toggleRaytracing() },
+    ]);
+
+    this._addMenu('Window', [
+      { label: 'Toggle Scene Collection', action: () => this._togglePanel('scene-collection') },
+      { label: 'Toggle Properties', action: () => this._togglePanel('properties') },
+      { type: 'separator' },
+      { label: 'Theme', submenu: [
+        { label: 'Dark', action: () => this._setTheme('dark') },
+        { label: 'Darker', action: () => this._setTheme('darker') },
+        { label: 'Blueprint', action: () => this._setTheme('blueprint') },
+      ]},
+    ]);
+
+    this._addMenu('Help', [
+      { label: 'Documentation', action: () => this._openDocs() },
+      { label: 'Keyboard Shortcuts', action: () => this._showShortcuts() },
+      { type: 'separator' },
+      { label: 'About', action: () => this._showAbout() },
+    ]);
+  },
+
+  _addMenu(label, items) {
+    const menuButton = document.createElement('div');
+    menuButton.className = 'menu-button';
+    menuButton.textContent = label;
+    menuButton.style.cssText = `
+      padding: 6px 12px;
+      cursor: pointer;
+      color: #ccc;
+      position: relative;
+    `;
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'menu-dropdown';
+    dropdown.style.cssText = `
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      background: #2a2a2a;
+      border: 1px solid #444;
+      min-width: 200px;
+      z-index: 10001;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    `;
+
+    this._buildMenuItems(dropdown, items);
+
+    menuButton.addEventListener('mouseenter', () => {
+      this._closeAllMenus();
+      dropdown.style.display = 'block';
+    });
+
+    menuButton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isVisible = dropdown.style.display === 'block';
+      this._closeAllMenus();
+      if (!isVisible) dropdown.style.display = 'block';
+    });
+
+    dropdown.addEventListener('mouseleave', () => {
+      dropdown.style.display = 'none';
+    });
+
+    this._menuBar.appendChild(menuButton);
+    this._menuBar.appendChild(dropdown);
+    this._menus.set(label, { button: menuButton, dropdown });
+  },
+
+  _buildMenuItems(container, items) {
+    items.forEach(item => {
+      if (item.type === 'separator') {
+        const sep = document.createElement('div');
+        sep.style.cssText = 'height: 1px; background: #444; margin: 4px 0;';
+        container.appendChild(sep);
+        return;
+      }
+
+      const menuItem = document.createElement('div');
+      menuItem.style.cssText = `
+        padding: 8px 16px;
+        cursor: pointer;
+        color: #ccc;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      `;
+
+      menuItem.innerHTML = `
+        <span>${item.label}</span>
+        ${item.shortcut ? `<span style="color: #666; font-size: 11px;">${item.shortcut}</span>` : ''}
+      `;
+
+      menuItem.addEventListener('mouseenter', () => {
+        menuItem.style.background = '#4a9eff';
+        menuItem.style.color = '#fff';
+      });
+
+      menuItem.addEventListener('mouseleave', () => {
+        menuItem.style.background = 'transparent';
+        menuItem.style.color = '#ccc';
+      });
+
+      if (item.submenu) {
+        const submenu = document.createElement('div');
+        submenu.style.cssText = `
+          display: none;
+          position: absolute;
+          left: 100%;
+          top: 0;
+          background: #2a2a2a;
+          border: 1px solid #444;
+          min-width: 200px;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        `;
+        this._buildMenuItems(submenu, item.submenu);
+        menuItem.appendChild(submenu);
+
+        menuItem.addEventListener('mouseenter', () => {
+          submenu.style.display = 'block';
+        });
+      } else {
+        menuItem.addEventListener('click', () => {
+          if (item.action) item.action();
+          this._closeAllMenus();
+        });
+      }
+
+      container.appendChild(menuItem);
+    });
+  },
+
+  _closeAllMenus() {
+    this._menus.forEach(menu => {
+      menu.dropdown.style.display = 'none';
+    });
+  },
+
+  // Action stubs - connect to actual implementations
+  _triggerImport() { document.getElementById('file-input')?.click(); },
+  _triggerExport(format) { window.dispatchEvent(new CustomEvent('export', { detail: { format } })); },
+  _saveScene() { console.log('Save scene'); },
+  _loadScene() { console.log('Load scene'); },
+  _undo() { window.dispatchEvent(new CustomEvent('undo')); },
+  _redo() { window.dispatchEvent(new CustomEvent('redo')); },
+  _copy() { window.dispatchEvent(new CustomEvent('copy')); },
+  _paste() { window.dispatchEvent(new CustomEvent('paste')); },
+  _duplicate() { window.dispatchEvent(new CustomEvent('duplicate')); },
+  _delete() { window.dispatchEvent(new CustomEvent('delete')); },
+  _selectAll() { window.dispatchEvent(new CustomEvent('selectAll')); },
+  _deselectAll() { window.dispatchEvent(new CustomEvent('deselectAll')); },
+  _invertSelection() { window.dispatchEvent(new CustomEvent('invertSelection')); },
+  _addPrimitive(type) { window.dispatchEvent(new CustomEvent('addPrimitive', { detail: { type } })); },
+  _addModifier(type) { window.dispatchEvent(new CustomEvent('addModifier', { detail: { type } })); },
+  _group() { window.dispatchEvent(new CustomEvent('group')); },
+  _ungroup() { window.dispatchEvent(new CustomEvent('ungroup')); },
+  _join() { window.dispatchEvent(new CustomEvent('join')); },
+  _setCameraView(view) { window.dispatchEvent(new CustomEvent('setCameraView', { detail: { view } })); },
+  _resetView() { window.dispatchEvent(new CustomEvent('resetView')); },
+  _frameSelected() { window.dispatchEvent(new CustomEvent('frameSelected')); },
+  _frameAll() { window.dispatchEvent(new CustomEvent('frameAll')); },
+  _applyLightingPreset(preset) { window.dispatchEvent(new CustomEvent('applyLightingPreset', { detail: { preset } })); },
+  _toggleGrid() { window.dispatchEvent(new CustomEvent('toggleGrid')); },
+  _toggleGizmo() { window.dispatchEvent(new CustomEvent('toggleGizmo')); },
+  _setTool(tool) { window.dispatchEvent(new CustomEvent('setTool', { detail: { tool } })); },
+  _setRenderPreset(preset) { window.dispatchEvent(new CustomEvent('setRenderPreset', { detail: { preset } })); },
+  _captureScreenshot() { window.dispatchEvent(new CustomEvent('captureScreenshot')); },
+  _toggleRaytracing() { window.dispatchEvent(new CustomEvent('toggleRaytracing')); },
+  _togglePanel(panel) { window.dispatchEvent(new CustomEvent('togglePanel', { detail: { panel } })); },
+  _setTheme(theme) { window.dispatchEvent(new CustomEvent('setTheme', { detail: { theme } })); },
+  _openDocs() { window.open('https://docs.example.com', '_blank'); },
+  _showShortcuts() { console.log('Show shortcuts'); },
+  _showAbout() { console.log('Show about'); },
+
+  update(deltaTime) {},
+
+  nodes: {}
+};
+```
+
+---
+
+## 2. Lighting & Camera Plugin (`plugins/LightingCameraPlugin.js`)
+
+```javascript
+/**
+ * LightingCameraPlugin - Camera controls, views, and lighting management.
+ */
+import * as THREE from 'three';
+
+export const LightingCameraPlugin = {
+  name: 'LightingCamera',
+  _state: null,
+  _cameraPresets: new Map(),
+  _lightingPresets: new Map(),
+  _currentPreset: 'perspective',
+
+  init(state) {
+    this._state = state;
+    this._initCameraPresets();
+    this._initLightingPresets();
+    this._setupEventListeners();
+  },
+
+  _initCameraPresets() {
+    this._cameraPresets.set('perspective', {
+      position: { x: 10, y: 10, z: 10 },
+      target: { x: 0, y: 0, z: 0 },
+      fov: 75
+    });
+
+    this._cameraPresets.set('top', {
+      position: { x: 0, y: 20, z: 0 },
+      target: { x: 0, y: 0, z: 0 },
+      fov: 75
+    });
+
+    this._cameraPresets.set('front', {
+      position: { x: 0, y: 5, z: 15 },
+      target: { x: 0, y: 0, z: 0 },
+      fov: 75
+    });
+
+    this._cameraPresets.set('right', {
+      position: { x: 15, y: 5, z: 0 },
+      target: { x: 0, y: 0, z: 0 },
+      fov: 75
+    });
+  },
+
+  _initLightingPresets() {
+    this._lightingPresets.set('studio', {
+      ambient: { color: 0xffffff, intensity: 0.6 },
+      directional: { color: 0xffffff, intensity: 1.0, position: { x: 5, y: 10, z: 7 } },
+      background: 0x1a1a1a
+    });
+
+    this._lightingPresets.set('outdoor', {
+      ambient: { color: 0x87ceeb, intensity: 0.8 },
+      directional: { color: 0xfff4e0, intensity: 2.0, position: { x: 10, y: 20, z: 10 } },
+      background: 0x87ceeb
+    });
+
+    this._lightingPresets.set('night', {
+      ambient: { color: 0x112244, intensity: 0.2 },
+      directional: { color: 0x4466aa, intensity: 0.3, position: { x: -5, y: 10, z: 5 } },
+      background: 0x0a0a1a
+    });
+
+    this._lightingPresets.set('dramatic', {
+      ambient: { color: 0x000000, intensity: 0.1 },
+      directional: { color: 0xffffff, intensity: 3.0, position: { x: 0, y: 8, z: 5 } },
+      background: 0x000000
+    });
+  },
+
+  _setupEventListeners() {
+    window.addEventListener('setCameraView', (e) => this.setCameraView(e.detail.view));
+    window.addEventListener('resetView', () => this.resetView());
+    window.addEventListener('frameSelected', () => this.frameSelected());
+    window.addEventListener('frameAll', () => this.frameAll());
+    window.addEventListener('applyLightingPreset', (e) => this.applyLightingPreset(e.detail.preset));
+  },
+
+  setCameraView(presetName) {
+    const preset = this._cameraPresets.get(presetName);
+    if (!preset) return;
+
+    const camera = this._state.data.camera;
+    const controls = this._state.data.controls;
+
+    camera.position.set(preset.position.x, preset.position.y, preset.position.z);
+    controls.target.set(preset.target.x, preset.target.y, preset.target.z);
+    
+    if (preset.fov) {
+      camera.fov = preset.fov;
+      camera.updateProjectionMatrix();
+    }
+
+    controls.update();
+    this._currentPreset = presetName;
+    this._state.emit('camera:view:changed', { preset: presetName });
+  },
+
+  resetView() {
+    this.setCameraView('perspective');
+  },
+
+  frameSelected() {
+    const selected = this._state.data.selectedObjects;
+    if (!selected || selected.length === 0) return;
+
+    const box = new THREE.Box3();
+    selected.forEach(obj => box.expandByObject(obj));
+
+    this._frameBox(box);
+  },
+
+  frameAll() {
+    const scene = this._state.data.scene;
+    const box = new THREE.Box3();
+    
+    scene.traverse(obj => {
+      if (obj.userData.isManagedObject) {
+        box.expandByObject(obj);
+      }
+    });
+
+    this._frameBox(box);
+  },
+
+  _frameBox(box) {
+    const camera = this._state.data.camera;
+    const controls = this._state.data.controls;
+
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    
+    const fov = camera.fov * (Math.PI / 180);
+    let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+    cameraZ *= 1.5;
+
+    camera.position.set(center.x, center.y, center.z + cameraZ);
+    controls.target.copy(center);
+    controls.update();
+  },
+
+  applyLightingPreset(presetName) {
+    const preset = this._lightingPresets.get(presetName);
+    if (!preset) return;
+
+    const scene = this._state.data.scene;
+    
+    // Update ambient light
+    scene.traverse(obj => {
+      if (obj.isAmbientLight) {
+        obj.color.set(preset.ambient.color);
+        obj.intensity = preset.ambient.intensity;
+      }
+      if (obj.isDirectionalLight) {
+        obj.color.set(preset.directional.color);
+        obj.intensity = preset.directional.intensity;
+        obj.position.set(
+          preset.directional.position.x,
+          preset.directional.position.y,
+          preset.directional.position.z
+        );
+      }
+    });
+
+    // Update background
+    scene.background = new THREE.Color(preset.background);
+
+    this._state.emit('lighting:preset:applied', { preset: presetName });
+  },
+
+  update(deltaTime) {},
+
+  nodes: {
+    'Camera/SetViewNode': (x, y) => {
+      const el = document.createElement('div');
+      el.className = 'shader-node';
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+      el.innerHTML = `
+        <div class="node-header">📷 Set Camera View</div>
+        <div class="node-body">
+          <select class="node-input" data-prop="view">
+            <option value="perspective">Perspective</option>
+            <option value="top">Top</option>
+            <option value="front">Front</option>
+            <option value="right">Right</option>
+          </select>
+          <button class="node-button" data-action="set">Set View</button>
+        </div>
+      `;
+      return el;
+    },
+
+    'Lighting/ApplyPresetNode': (x, y) => {
+      const el = document.createElement('div');
+      el.className = 'shader-node';
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+      el.innerHTML = `
+        <div class="node-header">💡 Lighting Preset</div>
+        <div class="node-body">
+          <select class="node-input" data-prop="preset">
+            <option value="studio">Studio</option>
+            <option value="outdoor">Outdoor</option>
+            <option value="night">Night</option>
+            <option value="dramatic">Dramatic</option>
+          </select>
+          <button class="node-button" data-action="apply">Apply</button>
+        </div>
+      `;
+      return el;
+    }
+  }
+};
+```
+
+---
+
+## Integration
+
+```javascript
+// In MasterApp.js
+import { MenuSystemPlugin } from './plugins/MenuSystemPlugin.js';
+import { LightingCameraPlugin } from './plugins/LightingCameraPlugin.js';
+
+export class MasterApp {
+  async init() {
+    // Register menu system first
+    this.plugins.register(MenuSystemPlugin);
+    
+    // Register lighting/camera
+    this.plugins.register(LightingCameraPlugin);
+    
+    // ... rest of initialization
+  }
+}
+```
+
+This gives you a professional, organized menu system with all features accessible through dropdowns, plus comprehensive camera and lighting controls!

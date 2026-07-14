@@ -37,6 +37,7 @@ import * as THREE from 'three';
 import { Water } from 'three/addons/objects/Water.js';
 import { createNodeCard } from './NodeFactory.js';
 import { logger } from '../core/Logger.js';
+import { createWaterNormalTexture } from './water/normal-map.js';
 
 // Default config sized for typical brutalist demo scenes (10km lake default,
 // smaller than the 10000-unit Three.js official example so visible reflections
@@ -65,84 +66,53 @@ export const WaterPlugin = {
   _waters: new Set(),
   _normalMap: null,
   _normalMapReady: false,
+  // When true, listening for the `water:cleanup` window event will
+  // auto-dispose off-camera water surfaces down to `autoCleanupBudget`.
+  // Disable for debugging / a "no-touch" run (e.g. a cinematic scene
+  // where the AI's recommendation should be informational only).
+  autoCleanupEnabled: true,
+  // Default cap: keep at most this many water surfaces after cleanup.
+  // MemoryExpert's recommend threshold is 4 (fires when count >= 4);
+  // 2 leaves the user's primary + their most-recent test puddle and
+  // trims the older test puddles the AI suspect is "forgotten".
+  autoCleanupBudget: 2,
+  // Reusable scratch Frustum + projection matrix so per-event
+  // off-camera tests don't allocate. Frustum is per-camera and
+  // re-initialized inside `_isOffCamera` to match the current camera.
+  _scratchFrustum: null,
+  _scratchMatrix: null,
 
   init(state) {
     this._state = state;
     this._initNormalMap();
     this._wireWindowEvents();
-    logger.log('WaterPlugin', 'Initialized.');
+    this._scratchFrustum = new THREE.Frustum();
+    this._scratchMatrix = new THREE.Matrix4();
+    logger.log('WaterPlugin', `Initialized (autoCleanupEnabled=${this.autoCleanupEnabled}, budget=${this.autoCleanupBudget}).`);
   },
 
   /**
-   * Build the procedural water-normal texture once. We use a CanvasTexture
-   * with a tiled sine-wave pattern so the surface stays self-contained (no
-   * external HTTP calls).
+   * Initialize the procedural water-normal texture.
    *
-   * Encoding: red channel = -dh/du (X slope), green channel = -dh/dv
-   * (Y slope), blue = 255. We use finite differences across a fixed step
-   * so the two channels differ; that produces diagonal wave motion rather
-   * than the perfectly-aligned stripes you'd get from encoding the same
-   * scalar in both. The Math.tanh bounds the final byte value so the
-   * encoding never saturates regardless of derivative magnitude.
+   * Delegates to `plugins/water/normal-map.js#createWaterNormalTexture`,
+   * a pure function that handles the math + DOM-canvas painting with no
+   * plugin state. This method is a thin try/catch wrapper that bridges
+   * the pure module's throw-on-failure contract into the plugin's
+   * `_normalMap` / `_normalMapReady` instance fields.
+   *
+   * Encoding cheat-sheet (also documented in normal-map.js):
+   *   red channel = -dh/du (X slope)
+   *   green channel = -dh/dv (Y slope)
+   *   blue = 255 (constant up vector)
+   *   Math.tanh bounds the byte value so derivatives never saturate.
+   *
+   * Failure modes are caught here rather than in the pure module so the
+   * plugin can degrade gracefully (caller will see `_normalMapReady=false`
+   * and fall back to the bundled waternormals.jpg via Three.js Water.js).
    */
   _initNormalMap() {
     try {
-      const size = 512;
-      const canvas = document.createElement('canvas');
-      canvas.width = size;
-      canvas.height = size;
-      const ctx = canvas.getContext('2d');
-      const img = ctx.createImageData(size, size);
-
-      // Two octaves of a rotating sine field. Their derivatives are
-      // combined and bounded via Math.tanh so the encoding never hits
-      // the [0, 255] clamps regardless of derivative magnitude (a plain
-      // linear multiplier would saturate most pixels to 0 or 255).
-      const freq1 = 6.0, freq2 = 14.0;
-      const amp1  = 0.4, amp2  = 0.18;
-      const step  = 1 / size;
-      // 0.06 is a soft scaler for the linear pre-bounded derivative; the
-      // Math.tanh below ensures the final byte value is always smooth.
-      const linearPreScale = 0.06;
-
-      const encodeBounded = (n) => {
-        // tanh bounds to (-1, 1), then maps to a centered 128 byte.
-        const bounded = Math.tanh(n * linearPreScale);
-        return Math.round((bounded * 0.5 + 0.5) * 255);
-      };
-
-      for (let y = 0; y < size; y++) {
-        for (let x = 0; x < size; x++) {
-          const u = x * step;
-          const v = y * step;
-
-          // Height field
-          const h1_x0 = Math.sin((u * freq1 + v * freq1 * 0.66) * Math.PI * 2) * amp1;
-          const h2_x0 = Math.sin((u * freq2 - v * freq2 * 0.64) * Math.PI * 2 + 0.4) * amp2;
-          // X+epsilon sample for dH/du
-          const h1_dx = Math.sin(((u + step) * freq1 + v * freq1 * 0.66) * Math.PI * 2) * amp1;
-          const h2_dx = Math.sin(((u + step) * freq2 - v * freq2 * 0.64) * Math.PI * 2 + 0.4) * amp2;
-          // Y+epsilon sample for dH/dv
-          const h1_dy = Math.sin((u * freq1 + (v + step) * freq1 * 0.66) * Math.PI * 2) * amp1;
-          const h2_dy = Math.sin((u * freq2 - (v + step) * freq2 * 0.64) * Math.PI * 2 + 0.4) * amp2;
-
-          const dhdu = ((h1_dx + h2_dx) - (h1_x0 + h2_x0)) / step;
-          const dhdv = ((h1_dy + h2_dy) - (h1_x0 + h2_x0)) / step;
-
-          const i = (y * size + x) * 4;
-          img.data[i + 0] = encodeBounded(-dhdu);  // X slope → red
-          img.data[i + 1] = encodeBounded(-dhdv);  // Y slope → green
-          img.data[i + 2] = 255;
-          img.data[i + 3] = 255;
-        }
-      }
-
-      ctx.putImageData(img, 0, 0);
-      const tex = new THREE.CanvasTexture(canvas);
-      tex.wrapS = THREE.RepeatWrapping;
-      tex.wrapT = THREE.RepeatWrapping;
-      tex.colorSpace = THREE.NoColorSpace;
-      this._normalMap = tex;
+      this._normalMap = createWaterNormalTexture();
       this._normalMapReady = true;
     } catch (err) {
       logger.warn('WaterPlugin', 'Procedural normal map failed:', err);
@@ -394,6 +364,152 @@ export const WaterPlugin = {
       const first = [...this._waters][0];
       if (first) this.disposeWater(first);
     });
+
+    // AI-driven cleanup bridge: AIAgent's MemoryExpert dispatches
+    // `{ type: 'WATER/RECOMMEND_CLEANUP', payload: { count, bytes, mb } }`
+    // whenever the live water count exceeds its threshold (4 by
+    // default). Without this bridge the recommendation is a toast +
+    // panel banner and nothing else. The auto-cleanup identifies
+    // off-camera / non-selected candidates and disposes them down to
+    // `autoCleanupBudget` so the AI's recommendation becomes an
+    // action, not just a notification. Oldest + selected waters are
+    // protected (the user's primary lake survives; the water they're
+    // actively editing survives).
+    window.addEventListener('water:cleanup', (e) => {
+      if (!this.autoCleanupEnabled) {
+        logger.log('WaterPlugin', 'water:cleanup ignored: autoCleanupEnabled = false');
+        return;
+      }
+      const detail = (e && e.detail) || {};
+      const result = this._autoCleanupWaters({
+        budget: typeof detail.budget === 'number' ? detail.budget : this.autoCleanupBudget,
+      });
+      if (result.deleted.length > 0) {
+        const mb = typeof detail.mb === 'number' ? detail.mb.toFixed(1) : '?';
+        logger.log('WaterPlugin', `Auto-cleaned ${result.deleted.length} water surface(s) (~${mb}MB GPU):`, result.deleted);
+        this._state?.emit?.('notification', {
+          message: `[Water] Cleaned up ${result.deleted.length} off-camera water surface(s) (~${mb}MB GPU freed)`,
+          type: 'info',
+        });
+      } else {
+        // No deletions possible (e.g. all waters are protected: oldest
+        // + selected, or already within budget). Clear the recommendation
+        // state so MemoryExpert doesn't re-fire every 30s and spam the
+        // user with the same toast. The next recommendation will only
+        // fire when a new water raises the count back above the expert's
+        // threshold (>= 4 by default). This mirrors the user-dismiss
+        // path on the GfxResourcePanel banner.
+        logger.log('WaterPlugin', `water:cleanup: nothing disposed (${result.skipped || 'no reason'}) \u2014 clearing state`);
+        const sm = this._state?.data?.pluginManager?._plugins?.get?.('StateManager');
+        if (sm && typeof sm.dispatch === 'function') {
+          sm.dispatch({
+            type: 'WATER/RECOMMEND_CLEANUP',
+            payload: null,
+            path: 'water.recommendCleanup',
+          });
+        }
+      }
+    });
+  },
+
+  // ── Auto-cleanup (AI recommendation → actual disposal) ───────────────
+
+  /**
+   * Test whether a water mesh is currently visible in the camera frustum.
+   * Uses the mesh's bounding sphere (computed lazily) projected through
+   * the camera's projection matrix. A camera that's null (scene not yet
+   * initialised) returns `false` (we can't prove "off-camera") so the
+   * water is kept by the sort.
+   *
+   * Note: Three.js's `Mesh.frustumCulled` (default true) already culls
+   * the water from the render loop when off-camera, so this test is
+   * semantically consistent with what the user actually sees on screen.
+   */
+  _isOffCamera(mesh, camera) {
+    if (!camera || !mesh || !mesh.geometry) return false;
+    if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
+    if (!this._scratchFrustum || !this._scratchMatrix) return false;
+    this._scratchMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    this._scratchFrustum.setFromProjectionMatrix(this._scratchMatrix);
+    // Apply mesh world transform to the local-space sphere
+    const worldSphere = mesh.geometry.boundingSphere.clone();
+    worldSphere.applyMatrix4(mesh.matrixWorld);
+    return !this._scratchFrustum.intersectsSphere(worldSphere);
+  },
+
+  /**
+   * Disposes off-camera water surfaces down to `budget`. Selection
+   * priority for protection:
+   *   1. The oldest water in `_waters` (Set preserves insertion order).
+   *      This is the user's "primary" lake — the first one they
+   *      crafted. The AI should never silently kill it.
+   *   2. Any water currently in `state.data.selectedObjects` (the
+   *      user is actively editing it; deleting it would be jarring).
+   *   3. The rest are candidates. Among candidates we sort:
+   *        a) off-camera first (highest priority for disposal)
+   *        b) then farthest from camera (least likely to be relevant)
+   *   We delete the top-N candidates where N = (currentCount - budget).
+   *
+   * Returns `{ deleted: [name...], skipped: string|null, ... }` so
+   * the caller can log / notify. `skipped` is one of:
+   *   - 'within-budget'  — already at or below budget, no action
+   *   - 'no-deletable-candidates' — count > budget but every water is
+   *     protected (e.g. user has selected all of them). The AI's
+   *     recommendation toast remains; user can unselect + retry.
+   *   - 'no-camera'      — can't prove off-camera without a camera,
+   *     and the only water is the protected primary.
+   *
+   * Note: disposeWater() also releases the GFX resource via the
+   * StateManager (which emits a `PERF/GFX_DELTA` release event), so
+   * after auto-cleanup the live water count drops below budget
+   * AND the aggregate GPU bytes drop. The next 2s MemoryExpert
+   * cycle should see the count back under threshold and stay quiet.
+   */
+  _autoCleanupWaters({ budget = 2 } = {}) {
+    if (this._waters.size <= budget) {
+      return { deleted: [], skipped: 'within-budget' };
+    }
+
+    const camera = this._state?.data?.camera;
+    const selected = this._state?.data?.selectedObjects || [];
+    const selectedSet = new Set(selected);
+
+    // Set iteration order = insertion order. The first water is the
+    // user's "primary" (the lake they crafted first). Protect it
+    // unconditionally so the AI can't nuke their main work.
+    const waters = [...this._waters];
+    const primary = waters[0];
+
+    const candidates = waters.filter(m => m !== primary && !selectedSet.has(m));
+
+    if (candidates.length === 0) {
+      return { deleted: [], skipped: 'no-deletable-candidates' };
+    }
+
+    // Sort: off-camera first (highest-priority disposal), then
+    // farthest from camera. The sort is stable so insertion order
+    // is the tiebreaker (older test puddles before newer ones).
+    candidates.sort((a, b) => {
+      const aOff = this._isOffCamera(a, camera) ? 1 : 0;
+      const bOff = this._isOffCamera(b, camera) ? 1 : 0;
+      if (aOff !== bOff) return bOff - aOff;
+      if (camera) {
+        const aDist = a.position.distanceTo(camera.position);
+        const bDist = b.position.distanceTo(camera.position);
+        return bDist - aDist;
+      }
+      return 0;
+    });
+
+    const toDeleteCount = this._waters.size - budget;
+    const toDelete = candidates.slice(0, toDeleteCount);
+    const deleted = [];
+    for (const mesh of toDelete) {
+      const name = mesh.name;
+      this.disposeWater(mesh);
+      deleted.push(name);
+    }
+    return { deleted, skipped: null, freedCount: toDelete.length };
   },
 
   // ── Node-graph integration ────────────────────────────────────────────

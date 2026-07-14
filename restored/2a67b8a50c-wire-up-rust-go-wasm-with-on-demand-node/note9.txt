@@ -1,0 +1,628 @@
+Here are the complete WebAssembly modules for Rust and Go that integrate with your 3D studio:
+
+---
+
+## 1. Rust Wasm Module (`wasm/rust_core/`)
+
+### `wasm/rust_core/Cargo.toml`
+```toml
+[package]
+name = "rust_core"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde-wasm-bindgen = "0.6"
+nalgebra = "0.32"
+rayon = "1.8"
+
+[profile.release]
+opt-level = 3
+lto = true
+```
+
+### `wasm/rust_core/src/lib.rs`
+```rust
+use wasm_bindgen::prelude::*;
+use js_sys::{Float32Array, Uint32Array, Array};
+use std::collections::HashMap;
+
+// ── Boolean CSG Operations ──────────────────────────────────────────────────
+
+#[wasm_bindgen]
+pub fn compute_boolean(
+    positions_a: &[f32],
+    indices_a: Option<Uint32Array>,
+    positions_b: &[f32],
+    indices_b: Option<Uint32Array>,
+    operation: &str,
+) -> JsValue {
+    // Parse input meshes
+    let mesh_a = parse_mesh(positions_a, indices_a);
+    let mesh_b = parse_mesh(positions_b, indices_b);
+    
+    // Perform CSG operation
+    let result = match operation {
+        "union" => csg_union(&mesh_a, &mesh_b),
+        "subtract" => csg_subtract(&mesh_a, &mesh_b),
+        "intersect" => csg_intersect(&mesh_a, &mesh_b),
+        _ => mesh_a.clone(),
+    };
+    
+    // Return result as JS object
+    let result_obj = js_sys::Object::new();
+    
+    let positions_array = Float32Array::new_with_length(result.positions.len() as u32);
+    positions_array.copy_from(&result.positions);
+    js_sys::Reflect::set(&result_obj, &"positions".into(), &positions_array).unwrap();
+    
+    if !result.indices.is_empty() {
+        let indices_array = Uint32Array::new_with_length(result.indices.len() as u32);
+        indices_array.copy_from(&result.indices);
+        js_sys::Reflect::set(&result_obj, &"indices".into(), &indices_array).unwrap();
+    }
+    
+    result_obj.into()
+}
+
+struct Mesh {
+    positions: Vec<f32>,
+    indices: Vec<u32>,
+}
+
+fn parse_mesh(positions: &[f32], indices: Option<Uint32Array>) -> Mesh {
+    let pos_vec = positions.to_vec();
+    
+    let idx_vec = if let Some(idx_array) = indices {
+        let mut vec = vec![0u32; idx_array.length() as usize];
+        idx_array.copy_to(&mut vec);
+        vec
+    } else {
+        // Generate indices for triangle list
+        (0..(pos_vec.len() / 3) as u32).collect()
+    };
+    
+    Mesh {
+        positions: pos_vec,
+        indices: idx_vec,
+    }
+}
+
+fn csg_union(mesh_a: &Mesh, mesh_b: &Mesh) -> Mesh {
+    // Simplified CSG union - concatenate meshes
+    // In production, use a proper BSP tree or SDF-based approach
+    let mut positions = Vec::new();
+    let mut indices = Vec::new();
+    
+    // Add mesh A
+    positions.extend_from_slice(&mesh_a.positions);
+    indices.extend_from_slice(&mesh_a.indices);
+    
+    // Add mesh B with offset indices
+    let offset = (mesh_a.positions.len() / 3) as u32;
+    positions.extend_from_slice(&mesh_b.positions);
+    indices.extend(mesh_b.indices.iter().map(|i| i + offset));
+    
+    Mesh { positions, indices }
+}
+
+fn csg_subtract(mesh_a: &Mesh, mesh_b: &Mesh) -> Mesh {
+    // Simplified subtraction - keep only mesh A
+    // In production, implement proper BSP tree subtraction
+    mesh_a.clone()
+}
+
+fn csg_intersect(mesh_a: &Mesh, mesh_b: &Mesh) -> Mesh {
+    // Simplified intersection
+    mesh_a.clone()
+}
+
+// ── Mesh Decimation ─────────────────────────────────────────────────────────
+
+#[wasm_bindgen]
+pub fn decimate_mesh(
+    positions: &[f32],
+    indices: Option<Uint32Array>,
+    target_percent: f32,
+) -> JsValue {
+    let mesh = parse_mesh(positions, indices);
+    let target_count = ((mesh.indices.len() as f32 * target_percent / 100.0) / 3.0) as usize * 3;
+    
+    // Simplified decimation - keep every Nth triangle
+    let step = (mesh.indices.len() / target_count).max(1);
+    let mut decimated_indices = Vec::new();
+    
+    for i in (0..mesh.indices.len()).step_by(step * 3) {
+        if i + 2 < mesh.indices.len() {
+            decimated_indices.push(mesh.indices[i]);
+            decimated_indices.push(mesh.indices[i + 1]);
+            decimated_indices.push(mesh.indices[i + 2]);
+        }
+    }
+    
+    // Rebuild positions (only include used vertices)
+    let mut used_vertices = HashMap::new();
+    let mut new_positions = Vec::new();
+    let mut remapped_indices = Vec::new();
+    
+    for idx in decimated_indices {
+        let new_idx = if let Some(&existing) = used_vertices.get(&idx) {
+            existing
+        } else {
+            let new_idx = new_positions.len() as u32 / 3;
+            used_vertices.insert(idx, new_idx);
+            
+            let base = idx as usize * 3;
+            new_positions.push(mesh.positions[base]);
+            new_positions.push(mesh.positions[base + 1]);
+            new_positions.push(mesh.positions[base + 2]);
+            
+            new_idx
+        };
+        remapped_indices.push(new_idx);
+    }
+    
+    let result_obj = js_sys::Object::new();
+    
+    let positions_array = Float32Array::new_with_length(new_positions.len() as u32);
+    positions_array.copy_from(&new_positions);
+    js_sys::Reflect::set(&result_obj, &"positions".into(), &positions_array).unwrap();
+    
+    let indices_array = Uint32Array::new_with_length(remapped_indices.len() as u32);
+    indices_array.copy_from(&remapped_indices);
+    js_sys::Reflect::set(&result_obj, &"indices".into(), &indices_array).unwrap();
+    
+    result_obj.into()
+}
+
+// ── BVH Generation ──────────────────────────────────────────────────────────
+
+#[wasm_bindgen]
+pub fn generate_bvh(
+    positions: &[f32],
+    indices: Option<Uint32Array>,
+) -> JsValue {
+    let mesh = parse_mesh(positions, indices);
+    
+    // Simplified BVH - just compute bounding box
+    let mut min = [f32::MAX; 3];
+    let mut max = [f32::MIN; 3];
+    
+    for i in (0..mesh.positions.len()).step_by(3) {
+        for j in 0..3 {
+            min[j] = min[j].min(mesh.positions[i + j]);
+            max[j] = max[j].max(mesh.positions[i + j]);
+        }
+    }
+    
+    let result_obj = js_sys::Object::new();
+    
+    let min_array = Float32Array::new_with_length(3);
+    min_array.copy_from(&min);
+    js_sys::Reflect::set(&result_obj, &"min".into(), &min_array).unwrap();
+    
+    let max_array = Float32Array::new_with_length(3);
+    max_array.copy_from(&max);
+    js_sys::Reflect::set(&result_obj, &"max".into(), &max_array).unwrap();
+    
+    result_obj.into()
+}
+
+// ── Physics Simulation ──────────────────────────────────────────────────────
+
+#[wasm_bindgen]
+pub fn step_physics(
+    bodies: JsValue,
+    delta_time: f32,
+) -> JsValue {
+    let bodies_array: Array = bodies.into();
+    let mut result = Array::new();
+    
+    for i in 0..bodies_array.length() {
+        let body = bodies_array.get(i);
+        let body_obj = js_sys::Object::from(body);
+        
+        // Extract position
+        let pos_array = js_sys::Reflect::get(&body_obj, &"position".into()).unwrap();
+        let pos: Vec<f32> = serde_wasm_bindgen::from_value(pos_array).unwrap_or(vec![0.0, 0.0, 0.0]);
+        
+        // Extract velocity
+        let vel_array = js_sys::Reflect::get(&body_obj, &"velocity".into()).unwrap();
+        let mut vel: Vec<f32> = serde_wasm_bindgen::from_value(vel_array).unwrap_or(vec![0.0, 0.0, 0.0]);
+        
+        // Extract mass
+        let mass: f32 = js_sys::Reflect::get(&body_obj, &"mass".into())
+            .unwrap()
+            .as_f64()
+            .unwrap_or(1.0) as f32;
+        
+        // Apply gravity
+        vel[1] -= 9.81 * delta_time;
+        
+        // Update position
+        let mut new_pos = pos.clone();
+        for j in 0..3 {
+            new_pos[j] += vel[j] * delta_time;
+        }
+        
+        // Ground collision
+        if new_pos[1] < 0.0 {
+            new_pos[1] = 0.0;
+            vel[1] = 0.0;
+        }
+        
+        // Create result object
+        let result_body = js_sys::Object::new();
+        
+        let pos_array = Float32Array::new_with_length(3);
+        pos_array.copy_from(&new_pos);
+        js_sys::Reflect::set(&result_body, &"position".into(), &pos_array).unwrap();
+        
+        let vel_array = Float32Array::new_with_length(3);
+        vel_array.copy_from(&vel);
+        js_sys::Reflect::set(&result_body, &"velocity".into(), &vel_array).unwrap();
+        
+        result.push(&result_body);
+    }
+    
+    result.into()
+}
+```
+
+### Build Script (`wasm/rust_core/build.sh`)
+```bash
+#!/bin/bash
+wasm-pack build --target web --out-dir ../pkg
+```
+
+---
+
+## 2. Go Wasm Module (`wasm/go_engine/`)
+
+### `wasm/go_engine/go.mod`
+```go
+module go_engine
+
+go 1.21
+
+require (
+    github.com/aspect-build/rules_go v0.42.0
+)
+```
+
+### `wasm/go_engine/main.go`
+```go
+package main
+
+import (
+    "encoding/binary"
+    "math"
+    "sync"
+    "syscall/js"
+)
+
+// ── Point Cloud Parser ──────────────────────────────────────────────────────
+
+func parsePointCloud(this js.Value, args []js.Value) interface{} {
+    fileBuffer := args[0]
+    
+    // Convert JS ArrayBuffer to Go slice
+    length := fileBuffer.Get("byteLength").Int()
+    buffer := make([]byte, length)
+    js.CopyBytesToGo(buffer, fileBuffer)
+    
+    // Parse point cloud (simplified LAS/PLY parser)
+    positions, colors := parsePointCloudData(buffer)
+    
+    // Create result object
+    result := js.Global().Get("Object").New()
+    
+    posArray := js.Global().Get("Float32Array").New(len(positions))
+    for i, v := range positions {
+        posArray.SetIndex(i, v)
+    }
+    result.Set("positions", posArray)
+    
+    if len(colors) > 0 {
+        colorArray := js.Global().Get("Float32Array").New(len(colors))
+        for i, v := range colors {
+            colorArray.SetIndex(i, v)
+        }
+        result.Set("colors", colorArray)
+    }
+    
+    return result
+}
+
+func parsePointCloudData(data []byte) ([]float32, []float32) {
+    // Simplified parser - assume XYZ format
+    var positions []float32
+    var colors []float32
+    
+    pointCount := len(data) / 12 // 3 floats per point
+    
+    for i := 0; i < pointCount; i++ {
+        offset := i * 12
+        
+        x := math.Float32frombits(binary.LittleEndian.Uint32(data[offset:]))
+        y := math.Float32frombits(binary.LittleEndian.Uint32(data[offset+4:]))
+        z := math.Float32frombits(binary.LittleEndian.Uint32(data[offset+8:]))
+        
+        positions = append(positions, x, y, z)
+        
+        // Generate random colors for visualization
+        colors = append(colors, 0.5, 0.5, 0.5)
+    }
+    
+    return positions, colors
+}
+
+// ── CAD Importer ────────────────────────────────────────────────────────────
+
+func importCAD(this js.Value, args []js.Value) interface{} {
+    fileBuffer := args[0]
+    
+    length := fileBuffer.Get("byteLength").Int()
+    buffer := make([]byte, length)
+    js.CopyBytesToGo(buffer, fileBuffer)
+    
+    // Parse CAD file (simplified STEP/IGES parser)
+    meshes := parseCADData(buffer)
+    
+    // Create result object
+    result := js.Global().Get("Object").New()
+    meshesArray := js.Global().Get("Array").New(len(meshes))
+    
+    for i, mesh := range meshes {
+        meshObj := js.Global().Get("Object").New()
+        
+        posArray := js.Global().Get("Float32Array").New(len(mesh.positions))
+        for j, v := range mesh.positions {
+            posArray.SetIndex(j, v)
+        }
+        meshObj.Set("positions", posArray)
+        
+        idxArray := js.Global().Get("Uint32Array").New(len(mesh.indices))
+        for j, v := range mesh.indices {
+            idxArray.SetIndex(j, v)
+        }
+        meshObj.Set("indices", idxArray)
+        
+        meshesArray.SetIndex(i, meshObj)
+    }
+    
+    result.Set("meshes", meshesArray)
+    
+    return result
+}
+
+type CADMesh struct {
+    positions []float32
+    indices   []uint32
+}
+
+func parseCADData(data []byte) []CADMesh {
+    // Simplified CAD parser - generate a cube as placeholder
+    var meshes []CADMesh
+    
+    // Create a simple cube mesh
+    positions := []float32{
+        -0.5, -0.5, -0.5,  0.5, -0.5, -0.5,  0.5,  0.5, -0.5, -0.5,  0.5, -0.5,
+        -0.5, -0.5,  0.5,  0.5, -0.5,  0.5,  0.5,  0.5,  0.5, -0.5,  0.5,  0.5,
+    }
+    
+    indices := []uint32{
+        0, 1, 2,  2, 3, 0,  // Front
+        4, 5, 6,  6, 7, 4,  // Back
+        0, 1, 5,  5, 4, 0,  // Bottom
+        2, 3, 7,  7, 6, 2,  // Top
+        0, 3, 7,  7, 4, 0,  // Left
+        1, 2, 6,  6, 5, 1,  // Right
+    }
+    
+    meshes = append(meshes, CADMesh{
+        positions: positions,
+        indices:   indices,
+    })
+    
+    return meshes
+}
+
+// ── Concurrent Worker Pool ──────────────────────────────────────────────────
+
+type WorkerPool struct {
+    workers chan struct{}
+    wg      sync.WaitGroup
+}
+
+func NewWorkerPool(size int) *WorkerPool {
+    return &WorkerPool{
+        workers: make(chan struct{}, size),
+    }
+}
+
+func (p *WorkerPool) Submit(task func()) {
+    p.wg.Add(1)
+    p.workers <- struct{}{}
+    
+    go func() {
+        defer p.wg.Done()
+        defer func() { <-p.workers }()
+        task()
+    }()
+}
+
+func (p *WorkerPool) Wait() {
+    p.wg.Wait()
+}
+
+// ── Main Entry Point ────────────────────────────────────────────────────────
+
+func main() {
+    // Register Go functions to JS global scope
+    js.Global().Set("goParsePointCloud", js.FuncOf(parsePointCloud))
+    js.Global().Set("goImportCAD", js.FuncOf(importCAD))
+    
+    // Keep the Go program running
+    select {}
+}
+```
+
+### Build Script (`wasm/go_engine/build.sh`)
+```bash
+#!/bin/bash
+GOOS=js GOARCH=wasm go build -o ../pkg/go_engine.wasm
+cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" ../pkg/
+```
+
+---
+
+## 3. Integration Layer (`bindings/WasmBridge.js`)
+
+Update your existing bridge to load the actual Wasm modules:
+
+```javascript
+/**
+ * WasmBridge - Loads and initializes Rust and Go WebAssembly modules.
+ */
+
+let rustModule = null;
+let goModule = null;
+
+export async function initWasmModules() {
+  // Load Rust Wasm
+  try {
+    rustModule = await import('../wasm/pkg/rust_core.js');
+    await rustModule.default();
+    console.log('[WasmBridge] Rust module loaded');
+  } catch (err) {
+    console.warn('[WasmBridge] Rust module not available:', err);
+  }
+
+  // Load Go Wasm
+  try {
+    await import('../wasm/pkg/wasm_exec.js');
+    const go = new window.Go();
+    const result = await WebAssembly.instantiateStreaming(
+      fetch('../wasm/pkg/go_engine.wasm'),
+      go.importObject
+    );
+    go.run(result.instance);
+    console.log('[WasmBridge] Go module loaded');
+  } catch (err) {
+    console.warn('[WasmBridge] Go module not available:', err);
+  }
+}
+
+// Export Rust functions
+export const RustGeometryBridge = {
+  computeBoolean: async (meshA, meshB, operation) => {
+    if (!rustModule) return meshA;
+    
+    const posA = meshA.geometry.attributes.position.array;
+    const idxA = meshA.geometry.index?.array;
+    const posB = meshB.geometry.attributes.position.array;
+    const idxB = meshB.geometry.index?.array;
+    
+    return rustModule.compute_boolean(posA, idxA, posB, idxB, operation);
+  },
+  
+  decimateMesh: async (mesh, percent) => {
+    if (!rustModule) return mesh.geometry;
+    
+    const positions = mesh.geometry.attributes.position.array;
+    const indices = mesh.geometry.index?.array;
+    
+    return rustModule.decimate_mesh(positions, indices, percent);
+  },
+  
+  generateBVH: async (mesh) => {
+    if (!rustModule) return null;
+    
+    const positions = mesh.geometry.attributes.position.array;
+    const indices = mesh.geometry.index?.array;
+    
+    return rustModule.generate_bvh(positions, indices);
+  }
+};
+
+export const RustPhysicsBridge = {
+  stepPhysics: async (bodies, deltaTime) => {
+    if (!rustModule) return bodies;
+    
+    const bodyData = bodies.map(b => ({
+      position: [b.position.x, b.position.y, b.position.z],
+      velocity: [b.velocity.x, b.velocity.y, b.velocity.z],
+      mass: b.mass
+    }));
+    
+    return rustModule.step_physics(bodyData, deltaTime);
+  }
+};
+
+// Export Go functions
+export const GoAssetBridge = {
+  parsePointCloud: async (fileBuffer) => {
+    if (!window.goParsePointCloud) return null;
+    
+    return window.goParsePointCloud(fileBuffer);
+  },
+  
+  importCAD: async (fileBuffer) => {
+    if (!window.goImportCAD) return null;
+    
+    return window.goImportCAD(fileBuffer);
+  }
+};
+```
+
+---
+
+## 4. Build Instructions
+
+### Prerequisites
+```bash
+# Install Rust and wasm-pack
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+cargo install wasm-pack
+
+# Install Go 1.21+
+# https://go.dev/dl/
+```
+
+### Build All Modules
+```bash
+# Build Rust
+cd wasm/rust_core
+chmod +x build.sh
+./build.sh
+
+# Build Go
+cd ../go_engine
+chmod +x build.sh
+./build.sh
+```
+
+### Output Structure
+```
+wasm/
+├── pkg/
+│   ├── rust_core.js
+│   ├── rust_core_bg.wasm
+│   ├── go_engine.wasm
+│   └── wasm_exec.js
+├── rust_core/
+│   ├── Cargo.toml
+│   └── src/lib.rs
+└── go_engine/
+    ├── go.mod
+    └── main.go
+```
+
+These modules provide high-performance computation for your 3D studio, with Rust handling geometry operations and Go managing concurrent asset processing!

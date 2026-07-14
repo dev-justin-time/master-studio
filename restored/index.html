@@ -1,0 +1,44 @@
+o9<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Restored Logic Pages</title>
+  <style>
+    :root { --bg:#131313; --panel:#1c1b1b; --neon:#02e600; --on:#e5e2e1; --muted:#b9ccaf; --warn:#ffe16d; }
+    * { box-sizing: border-box; }
+    body { font: 14px/1.5 system-ui, sans-serif; background: var(--bg); color: var(--on); padding: 28px; margin: 0; min-height: 100vh; }
+    h1 { color: var(--neon); margin: 0 0 6px; font-size: 28px; letter-spacing: 0.05em; text-transform: uppercase; }
+    .subtitle { color: var(--muted); margin: 0 0 24px; max-width: 720px; }
+    .commit { background: var(--panel); border: 2px solid var(--neon); padding: 16px 18px; margin-bottom: 14px; box-shadow: 4px 4px 0 0 #000; }
+    .commit h2 { color: var(--warn); margin: 0 0 6px; font-size: 16px; font-family: monospace; }
+    .commit h2 .sha { color: var(--neon); }
+    .pages { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .pages a { background: var(--bg); border: 1px solid var(--neon); color: var(--neon); padding: 6px 12px; text-decoration: none; font-family: monospace; font-size: 12px; transition: background 0.1s, color 0.1s, transform 0.1s; }
+    .pages a:hover { background: var(--neon); color: #013a00; transform: translate(-1px, -1px); box-shadow: 2px 2px 0 0 #000; }
+    .empty { color: var(--muted); font-style: italic; }
+  </style>
+</head>
+<body>
+  <h1>Restored Logic Pages</h1>
+  <p class="subtitle">Every snapshot below is a self-contained git-commit extract under <code>restored/</code>. Click any page to open the rendered version. Each HTML has been rewritten so leading-<code>/</code> paths resolve relative to its snapshot folder, and a page-scoped importmap lets <code>import "three"</code> work without a bundler.</p>
+  <section class="commit">
+    <h2><span class="sha">140e04a2c1</span> &middot; warn-on-missing-state</h2>
+    <div class="pages">
+      <a href="140e04a2c1-warn-on-missing-state/note14.html">note14.html</a>
+    </div>
+  </section>
+  <section class="commit">
+    <h2><span class="sha">6ef493c375</span> &middot; wasm-add</h2>
+    <div class="pages">
+      <a href="6ef493c375-wasm-add/note14.html">note14.html</a>
+    </div>
+  </section>
+  <section class="commit">
+    <h2><span class="sha">c5e3c66b15</span> &middot; add-nodes</h2>
+    <div class="pages">
+      <a href="c5e3c66b15-add-nodes/note14.html">note14.html</a>
+    </div>
+  </section>
+</body>
+</html>

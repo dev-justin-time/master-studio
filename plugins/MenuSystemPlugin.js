@@ -148,6 +148,31 @@ export const MenuSystemPlugin = {
       { label: 'Keyboard Shortcuts', action: () => logger.log('Menu', 'Keyboard shortcuts: L=Lasso G=Group U=Ungroup S=Sticky P=Debug 1-3=Color') },
       { label: 'About Master Studio', action: () => alert('Master Studio — 3D Studio Environment') },
     ]);
+
+    // ── MoCap menu — motion capture system ──
+    // All actions dispatch window CustomEvents that MoCapPlugin listens for
+    // in its _wireWindowEvents() (no direct cross-plugin coupling).
+    this._addMenu('MoCap', [
+      { label: 'Show / Hide HUD', shortcut: 'F2', action: () => window.dispatchEvent(new CustomEvent('mocap:toggle-hud')) },
+      { type: 'separator' },
+      { label: 'Add Webcam (Body)', action: () => window.dispatchEvent(new CustomEvent('mocap:add-webcam')) },
+      { label: 'Add Hand Source', action: () => window.dispatchEvent(new CustomEvent('mocap:add-hand')) },
+      { label: 'Add Face Source', action: () => window.dispatchEvent(new CustomEvent('mocap:add-face')) },
+      { type: 'separator' },
+      { label: 'T-Pose Calibrate', action: () => window.dispatchEvent(new CustomEvent('mocap:calibrate', { detail: { preset: 'mixamo-humanoid' } })) },
+      { label: 'Built-in Gestures', submenu: [
+        { label: 'Wave', action: () => window.dispatchEvent(new CustomEvent('notification', { detail: { type: 'info', message: 'Gesture: Wave — wave right hand above shoulder' } })) },
+        { label: 'Point', action: () => window.dispatchEvent(new CustomEvent('notification', { detail: { type: 'info', message: 'Gesture: Point — extend right arm fully' } })) },
+        { label: 'Thumbs Up', action: () => window.dispatchEvent(new CustomEvent('notification', { detail: { type: 'info', message: 'Gesture: Thumbs Up — raise right fist above shoulder' } })) },
+        { label: 'Arms Up', action: () => window.dispatchEvent(new CustomEvent('notification', { detail: { type: 'info', message: 'Gesture: Arms Up — raise both wrists above shoulders' } })) },
+        { label: 'Squat', action: () => window.dispatchEvent(new CustomEvent('notification', { detail: { type: 'info', message: 'Gesture: Squat — drop hip below knee' } })) },
+      ]},
+      { type: 'separator' },
+      { label: 'Start Recording', action: () => window.dispatchEvent(new CustomEvent('mocap:start-recording', { detail: { name: `Session_${Date.now()}` } })) },
+      { label: 'Stop Recording', action: () => window.dispatchEvent(new CustomEvent('mocap:stop-recording')) },
+      { label: 'Export BVH (last session)', action: () => window.dispatchEvent(new CustomEvent('mocap:export', { detail: { format: 'bvh' } })) },
+      { label: 'Export GLB (last session)', action: () => window.dispatchEvent(new CustomEvent('mocap:export', { detail: { format: 'glb' } })) },
+    ]);
   },
 
   /**

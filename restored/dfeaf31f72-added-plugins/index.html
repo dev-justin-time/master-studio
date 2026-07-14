@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<!-- RESTORED_RUNNABLE_MARKER -->
+<script type="importmap">
+{
+  "imports": {
+    "three":         "https://unpkg.com/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Master Studio</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: #111;
+      color: #e0e0e0;
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    #app {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* ── Viewport ── */
+    #viewport {
+      flex: 1;
+      position: relative;
+    }
+
+    #renderCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: 320px;
+      background: #1a1a1a;
+      border-left: 1px solid #333;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #sidebar-header {
+      padding: 16px;
+      border-bottom: 1px solid #333;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: #888;
+    }
+
+    /* ── Node Graph Area ── */
+    #node-graph-area {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    #node-graph-area:empty::after {
+      content: 'No nodes in graph. Use "Add Node" below.';
+      color: #555;
+      font-size: 13px;
+      text-align: center;
+      padding: 24px 16px;
+      display: block;
+    }
+
+    /* ── Add Node Menu ── */
+    #add-node-panel {
+      border-top: 1px solid #333;
+      padding: 12px;
+      max-height: 40%;
+      overflow-y: auto;
+    }
+
+    #add-node-panel h3 {
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: #888;
+      margin-bottom: 8px;
+    }
+
+    #add-node-menu {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .menu-category {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: #666;
+      padding: 8px 8px 4px;
+      border-top: 1px solid #2a2a2a;
+      margin-top: 4px;
+    }
+
+    .menu-category:first-child {
+      border-top: none;
+      margin-top: 0;
+    }
+
+    .menu-item {
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      color: #ccc;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .menu-item:hover {
+      background: #2a2a2a;
+      color: #fff;
+    }
+
+    /* ── Toolbar ── */
+    #toolbar {
+      padding: 8px 16px;
+      border-top: 1px solid #333;
+      display: flex;
+      gap: 8px;
+    }
+
+    #toolbar button {
+      background: #2a2a2a;
+      border: 1px solid #444;
+      color: #ccc;
+      padding: 6px 14px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    #toolbar button:hover {
+      background: #3a3a3a;
+      border-color: #555;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- 3D Viewport -->
+    <div id="viewport">
+      <canvas id="renderCanvas"></canvas>
+      <canvas id="lassoOverlay" style="position:absolute;top:0;left:0;width:100%;height:100%;display:none;pointer-events:none;z-index:10;"></canvas>
+      <div id="controls-hint" style="position:absolute;bottom:12px;left:12px;font-size:11px;color:#555;font-family:monospace;pointer-events:none;z-index:5;">
+        <b>L</b> Lasso &nbsp; <b>G</b> Group &nbsp; <b>U</b> Ungroup &nbsp; <b>S</b> Sticky &nbsp; <b>P</b> Debug &nbsp; <b>1-3</b> Color Select
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div id="sidebar">
+      <div id="sidebar-header">Node Graph</div>
+      <div id="node-graph-area"></div>
+
+      <div id="add-node-panel">
+        <h3>Add Node</h3>
+        <div id="add-node-menu">
+          <!-- Populated dynamically by PluginManager -->
+        </div>
+      </div>
+
+      <div id="toolbar">
+        <button id="btn-play" title="Toggle animation playback">▶ Play</button>
+        <button id="btn-add-cube" title="Add a test cube to the scene">+ Cube</button>
+        <button id="btn-select-all" title="Select all objects (Ctrl+A)">Select All</button>
+        <button id="btn-deselect" title="Deselect all (Esc)">Deselect</button>
+        <button id="btn-lasso" title="Toggle lasso selection (L)">🎯 Lasso</button>
+        <span id="sticky-indicator" style="font-size:10px;color:#888;padding:6px;align-self:center;">Sticky: OFF</span>
+        <button id="btn-debug" title="Toggle physics debug overlay (P)">🐛 Debug</button>
+      </div>
+
+      <!-- StateManager Debug Panel -->
+      <div id="state-debug-panel" style="border-top:1px solid #333;padding:10px;font-family:monospace;font-size:10px;color:#aaa;max-height:140px;overflow:hidden;">
+        <div id="state-debug-toggle" style="cursor:pointer;color:#666;margin-bottom:6px;user-select:none;">▸ State Debug</div>
+        <div id="state-debug-body" style="display:none;line-height:1.6;">
+          <div>FPS: <span id="dbg-fps">--</span></div>
+          <div>Frame: <span id="dbg-frame">--</span>ms</div>
+          <div>Memory: <span id="dbg-mem">--</span>MB</div>
+          <div>Outline: <span id="dbg-outline">--</span></div>
+          <div>Substeps: <span id="dbg-substeps">--</span></div>
+          <div>Middleware: <span id="dbg-mw">--</span></div>
+          <div>Buffer: <span id="dbg-buf">--</span></div>
+          <div style="color:#0f0;margin-top:2px;">Experts: <span id="dbg-experts">--</span></div>
+          <div>Listeners: <span id="dbg-listeners">--</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./MasterApp.js"></script>
+</body>
+</html>

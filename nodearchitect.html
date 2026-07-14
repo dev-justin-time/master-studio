@@ -1,89 +1,80 @@
 <!DOCTYPE html>
-<html class="dark" lang="en">
+<html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>MEME STUDIO | Node Architect</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Master Studio | Node Architect</title>
 
-  <!-- Tailwind CDN (parity with sibling brutalist pages) -->
-  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <!-- Brutalist typography -->
   <link href="https://fonts.googleapis.com/css2?family=Anybody:wght@700;800;900&family=Plus+Jakarta+Sans:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 
-  <!-- Sibling brutalist CSS + refactored concern-based CSS -->
-  <link rel="stylesheet" href="/scene.css"/>
-  <link rel="stylesheet" href="/core/ui/brutalist/brutalist.css"/>
+  <!-- Shared brutalist skin (palette + .bs-* components) -->
+  <link rel="stylesheet" href="/core/brutalist.css" />
+  <!-- Concern-based CSS for the Node Architect modal internals (signal-indicator,
+       node-socket, node-string-input, node-font-map, node-scale-factor,
+       node-generator-core, etc.) — loaded by architect-orchestrator.js.
+       Untouched (separate concern file, not part of this migration). -->
+  <link rel="stylesheet" href="/core/ui/brutalist/brutalist.css" />
 </head>
-<body class="bg-surface text-on-surface selection:bg-primary-container selection:text-on-primary overflow-hidden h-screen flex flex-col">
+<body id="nodearchitect-page" class="bs-body-shell">
 
-  <!-- ── MODAL: THE NODE ARCHITECT (uses the refactored concern files) ────────── -->
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-background/90 backdrop-blur-md p-4" id="architect-modal">
-    <div class="relative w-full max-w-5xl bg-surface-container-lowest border border-primary-fixed/30 shadow-[0_0_40px_rgba(2,230,0,0.1)] overflow-hidden" id="architect-frame">
-
-      <div class="absolute top-6 right-16 z-10" id="signal-slot"></div>
-      <button class="absolute top-6 right-6 text-on-surface-variant hover:text-primary-fixed transition-colors" id="architect-close" aria-label="Close">
+  <!-- ── THE NODE ARCHITECT modal (always-open demo) ──────────────────────── -->
+  <div class="bs-modal" id="architect-modal">
+    <!-- Override the page-level modal max-width so the 12-col grid fits comfortably -->
+    <div class="bs-modal__panel" id="architect-frame">
+      <!-- Signal slot (signal-indicator concern mounts here) -->
+      <div style="position: absolute; top: 24px; right: 64px; z-index: 10;" id="signal-slot"></div>
+      <button class="bs-modal__close" id="architect-close" aria-label="Close" style="position: absolute; top: 24px; right: 24px;">
         <span class="material-symbols-outlined">close</span>
       </button>
 
-      <div class="p-8 border-b border-outline/20">
-        <div class="flex items-baseline gap-4">
-          <h2 class="font-headline-md text-headline-md text-primary-fixed uppercase tracking-[0.2em]">THE NODE ARCHITECT</h2>
-          <span class="font-label-mono text-label-mono text-outline uppercase opacity-50">/ TYPE_MAP_ALPHA</span>
+      <!-- Header -->
+      <div class="bs-modal__header">
+        <div style="display: flex; align-items: baseline; gap: 16px;">
+          <div class="bs-modal__title">THE NODE ARCHITECT</div>
+          <span style="font-family: 'Space Grotesk', monospace; font-size: 12px; color: var(--outline-variant); opacity: 0.5; text-transform: uppercase; letter-spacing: 0.05em;">/ TYPE_MAP_ALPHA</span>
         </div>
       </div>
 
-      <!-- Body — three input nodes + central generator core -->
-      <div class="p-8 grid grid-cols-12 gap-8 relative min-h-[450px]" id="architect-graph">
-
-        <div class="col-span-5 space-y-12 py-4">
+      <!-- Body: three input nodes + central generator core (architect-orchestrator populates slots) -->
+      <div class="bs-modal__body" id="architect-graph" style="display: grid; grid-template-columns: 5fr 7fr; gap: 32px; min-height: 450px;">
+        <div style="display: flex; flex-direction: column; gap: 48px;">
           <div id="slot-string-input"></div>
           <div id="slot-font-map"></div>
           <div id="slot-scale-factor"></div>
         </div>
-
-        <div class="col-span-7 flex items-center justify-center relative">
+        <div style="display: flex; align-items: center; justify-content: center; position: relative;">
           <div id="slot-gen-core" class="node-generator-core-host"></div>
         </div>
       </div>
 
-      <!-- Footer actions -->
-      <div class="p-6 bg-surface-container-lowest border-t border-outline/20 flex justify-between items-center">
-        <div class="flex items-center gap-8">
-          <div class="font-label-mono text-[10px] text-outline uppercase">
-            SYSTEM_LOAD: <span class="text-primary-fixed" id="status-load">—</span>
+      <!-- Footer -->
+      <div class="bs-modal__footer" style="justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 32px;">
+          <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; color: var(--outline-variant); text-transform: uppercase; letter-spacing: 0.05em;">
+            SYSTEM_LOAD: <span id="status-load" class="bs-neon">—</span>
           </div>
-          <div class="font-label-mono text-[10px] text-outline uppercase">
-            WIRES: <span class="text-primary-fixed" id="status-wires">0 ACTIVE</span>
+          <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; color: var(--outline-variant); text-transform: uppercase; letter-spacing: 0.05em;">
+            WIRES: <span id="status-wires" class="bs-neon">0 ACTIVE</span>
           </div>
         </div>
-        <div class="flex gap-4">
-          <button id="architect-cancel" class="px-8 py-3 border border-outline/50 text-outline font-label-bold text-label-bold uppercase hover:border-primary-fixed hover:text-primary-fixed transition-all">
-            CANCEL
-          </button>
-          <button id="architect-wire" class="px-10 py-3 border border-primary-fixed bg-primary-fixed/5 text-primary-fixed font-label-bold text-label-bold uppercase tracking-widest hover:bg-primary-fixed hover:text-on-primary transition-all shadow-[0_0_20px_rgba(119,255,97,0.1)]">
-            [ WIRE TO SCENE ]
-          </button>
+        <div style="display: flex; gap: 16px;">
+          <button id="architect-cancel" class="bs-cta-ghost" style="padding: 12px 32px;">CANCEL</button>
+          <button id="architect-wire" class="bs-cta-secondary" style="padding: 12px 40px; box-shadow: 0 0 20px rgba(119,255,97,0.1);">[ WIRE TO SCENE ]</button>
         </div>
       </div>
-
     </div>
   </div>
 
-  <!-- ── Project scaffolding (parity with sibling brutalist pages) ──────────── -->
-  <nav class="fixed top-0 w-full z-40 flex justify-between items-center px-8 h-16 bg-surface border-b-2 border-outline-variant shadow-[4px_4px_0px_0px_#02e600]">
-    <div class="flex items-center gap-8">
-      <a href="/index.html" class="font-headline-md text-headline-md text-primary-fixed uppercase tracking-tighter italic hover:opacity-80 transition-opacity">MEME STUDIO</a>
-      <a class="text-primary-fixed font-bold border-b-2 border-primary-fixed font-label-bold text-label-bold py-5" href="#">Node Architect</a>
-    </div>
-    <button class="bg-primary-container border-2 border-on-primary-container text-on-primary font-label-bold text-label-bold px-4 py-2 shadow-[4px_4px_0px_0px_#000000]">MINT NFT</button>
-  </nav>
-
-  <main class="flex flex-1 pt-16 overflow-hidden">
-    <aside class="fixed left-0 top-16 h-[calc(100vh-64px-32px)] w-64 bg-surface-container-lowest border-r-2 border-outline-variant flex flex-col p-4 z-30">
-      <div class="font-label-bold text-label-bold text-secondary-fixed mb-1 uppercase">ALPHA BUILD</div>
-      <div class="font-label-mono text-label-mono text-on-surface-variant opacity-60">v4.2.0-LFG</div>
-      <p class="font-label-mono text-[10px] text-outline mt-6">This page is a
-        <span class="text-primary-fixed">demo of the brutalist concern refactor</span>:
+  <!-- ── Side scaffolding aside + viewport stub (parity with sibling pages) ── -->
+  <main class="bs-page">
+    <aside class="bs-aside bs-aside--left">
+      <div class="bs-aside-tag">ALPHA BUILD</div>
+      <div class="bs-aside-version">v4.2.0-LFG</div>
+      <p style="font-family: 'Space Grotesk', monospace; font-size: 10px; color: var(--outline-variant); margin-top: 24px;">
+        This page is a
+        <span class="bs-neon">demo of the brutalist concern refactor</span>:
         signal-indicator → node-socket → corner-pins → blueprint-bg,
         string-input &middot; font-map &middot; scale-factor nodes,
         generator-core-node central output, wire-system overlay, and
@@ -91,16 +82,15 @@
       </p>
     </aside>
 
-    <section class="flex-1 ml-64 relative bg-surface overflow-hidden">
-      <div id="viewport-stub" class="absolute inset-0 z-0" style="background-image: linear-gradient(to right, rgba(0,255,0,0.1) 1px, transparent 1px), linear-gradient(to bottom, rgba(0,255,0,0.1) 1px, transparent 1px); background-size: 40px 40px; transform: perspective(1000px) rotateX(60deg) translateY(-200px) scale(2);"></div>
-      <div class="absolute top-4 left-4 z-10 px-4 py-2 bg-surface-container-highest/80 border-2 border-primary-fixed-dim text-primary-fixed font-label-mono text-label-mono backdrop-blur-md">
-        VIEWPORT: PERSPECTIVE (stub — this page demos the modal)
-      </div>
+    <section class="bs-viewport" id="viewport">
+      <div class="bs-grid-bg"></div>
+      <div class="bs-viewport-label">VIEWPORT: PERSPECTIVE (stub — this page demos the modal)</div>
     </section>
   </main>
 
   <script type="module" src="/MasterApp.js"></script>
   <script type="module" src="/core/scene-utils.js"></script>
+  <script type="module" src="/core/nav.js"></script>
   <script type="module" src="/core/nodes/architect-orchestrator.js"></script>
 
 </body>

@@ -1,0 +1,1018 @@
+/* ── core/brutalist.css ──────────────────────────────────────────────────────
+ *
+ * Shared visual skin for every page of Master Studio. The design is the
+ * SINGLE SOURCE OF TRUTH for the brutalist palette, the node card chrome,
+ * the sidebar, the toolbar, and the top nav. No page is allowed to redefine
+ * these class names — if a page needs a tweak, scope it under a page-id
+ * prefix (e.g. `#pipeline-page .node-card { ... }`) rather than overriding
+ * the global rules.
+ *
+ * Loaded by every HTML file via:
+ *   <link rel="stylesheet" href="/core/brutalist.css">
+ *
+ * Color tokens are CSS custom properties so a future light-on-dark toggle
+ * (or theme high-contrast mode) can swap `--bg` / `--on-surface` / etc.
+ * without touching any selector.
+ */
+
+/* ── Font imports (page-level <head> still references Google Fonts; keep
+       them here for the rare page that skips the head import) ──────────── */
+
+/* ── 1. Color tokens ──────────────────────────────────────────────────────── */
+:root {
+  --bg:                       #131313;
+  --surface-container:        #1c1b1b;
+  --surface-container-high:   #2a2a2a;
+  --surface-container-highest:#353534;
+  --surface-lowest:           #0e0e0e;
+
+  --primary-neon:             #02e600;   /* signals, active state */
+  --secondary-neon:           #ffe16d;   /* Wasm/Rust heavy accents */
+  --error-neon:               #ffb4ab;   /* error states */
+  --on-surface:               #e5e2e1;
+  --on-surface-variant:       #b9ccaf;
+  --outline-variant:          #3b4b35;
+  --border:                   #000;
+}
+
+/* ── 2. Reset + body ──────────────────────────────────────────────────────── */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--on-surface);
+  height: 100vh;
+  width: 100vw;
+}
+
+body { overflow: hidden; }
+
+/* ── 3. App shell layout ─────────────────────────────────────────────────── */
+#app {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Viewport (3D canvas host) — full-width column on the right of the sidebar,
+   full-screen when there is no sidebar (e.g. pipeline page). */
+#viewport {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+#renderCanvas, #render-canvas, canvas.pipeline-canvas {
+  display: block;
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;  height: 100%;
+}
+
+/* ── 4. Top nav — every page gets the same chrome. ────────────────────────── */
+/* Static, full-width, fixed at the top. Page <body> sets `padding-top: 56px`
+   via the page-level layout helper so the viewport starts BELOW the bar.
+   For the pipeline page, the bar can be smaller (40px) — see nav--compact. */
+.bs-nav {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: 56px; padding: 0 16px;
+  display: flex; align-items: center; gap: 16px;
+  background: var(--surface-lowest);
+  border-bottom: 2px solid var(--primary-neon);
+  font-family: 'Space Grotesk', monospace;
+  z-index: 100;
+  box-shadow: 0 4px 0 0 var(--primary-neon);
+}
+.bs-nav.bs-nav--compact { height: 40px; box-shadow: 0 2px 0 0 var(--primary-neon); font-size: 10px; }
+.bs-nav__brand {
+  font-family: 'Anybody', sans-serif;
+  font-weight: 900;
+  color: var(--primary-neon);
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+  font-size: 18px;
+  text-decoration: none;
+}
+.bs-nav__brand:hover { color: var(--secondary-neon); }
+
+.bs-nav__links {
+  display: flex; align-items: center; gap: 0;
+  height: 100%;
+  flex: 1;
+}
+.bs-nav__link {
+  display: flex; align-items: center;
+  height: 100%;
+  padding: 0 14px;
+  color: var(--on-surface-variant);
+  text-decoration: none;
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  border-bottom: 2px solid transparent;
+  transition: color 0.1s, background 0.1s;
+}
+.bs-nav__link:hover {
+  color: var(--primary-neon);
+  background: var(--surface-container);
+}
+.bs-nav__link.is-current {
+  color: var(--primary-neon);
+  border-bottom-color: var(--primary-neon);
+}
+
+.bs-nav__spacer { flex: 1; }
+.bs-nav__action {
+  background: var(--primary-neon);
+  color: var(--border);
+  padding: 6px 12px;
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  text-decoration: none;
+  border: 2px solid var(--border);
+  box-shadow: 2px 2px 0 0 var(--border);
+  cursor: pointer;
+  font-family: 'Space Grotesk', monospace;
+}
+.bs-nav__action:hover { transform: translate(1px, 1px); box-shadow: 1px 1px 0 0 var(--border); }
+.bs-nav__action:active { transform: translate(2px, 2px); box-shadow: none; }
+.bs-nav__action--ghost {
+  background: transparent;
+  color: var(--on-surface);
+}
+
+/* Page-body padding so content sits below the fixed nav */
+body.has-bs-nav { padding-top: 56px; }
+body.has-bs-nav.bs-nav-compact { padding-top: 40px; }
+
+/* ── 5. Brutalist sidebar (workspace + studio use this) ─────────────────── */
+#sidebar {
+  width: 320px;
+  background: var(--surface-lowest);
+  border-left: 2px solid var(--primary-neon);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  font-family: 'Space Grotesk', monospace;
+  box-shadow: -8px 0 0 0 var(--border);
+}
+
+#sidebar-header {
+  padding: 10px 14px;
+  background: var(--surface-container);
+  border-bottom: 2px solid var(--primary-neon);
+  display: flex; align-items: center; gap: 10px;
+  text-transform: uppercase;
+  color: var(--secondary-neon);
+  letter-spacing: 0.05em;
+  font-weight: 700; font-size: 11px;
+  box-shadow: 0 4px 0 0 var(--primary-neon);
+}
+.ms-logo {
+  width: 32px; height: 32px;
+  background: var(--secondary-neon);
+  border: 2px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Anybody', sans-serif;
+  font-size: 18px; color: var(--border);
+  font-weight: 900; letter-spacing: -0.04em;
+  box-shadow: 2px 2px 0 0 var(--border);
+}
+.ms-meta { display: flex; flex-direction: column; flex: 1; line-height: 1.15; }
+.ms-meta .ms-title { color: var(--on-surface); font-size: 11px; }
+.ms-meta .ms-version { color: var(--on-surface-variant); font-size: 8px; letter-spacing: 0.06em; }
+.ms-pulse {
+  width: 8px; height: 8px; border-radius: 9999px;
+  background: var(--primary-neon);
+  box-shadow: 0 0 8px var(--primary-neon);
+}
+
+/* ── 6. Node graph area (also used full-screen on the pipeline page) ────── */
+#node-graph-area {
+  position: relative;
+  overflow: auto;
+  padding: 16px;
+  background-color: var(--surface-lowest);
+  background-image:
+    radial-gradient(circle, var(--outline-variant) 1px, transparent 1px),
+    radial-gradient(circle, var(--outline-variant) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: 0 0, 12px 12px;
+  font-family: 'Space Grotesk', monospace;
+}
+#node-graph-area > .noodle-layer {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+#node-graph-area > .node-card,
+#node-graph-area > .shader-node {
+  position: relative;
+  z-index: 1;
+}
+#node-graph-area:empty::after {
+  content: 'NO NODES IN GRAPH. CLICK "ADD NODE" BELOW.';
+  color: var(--on-surface-variant);
+  font-family: 'Space Grotesk', monospace;
+  font-size: 11px;
+  text-align: center; padding: 32px 16px;
+  display: block; letter-spacing: 0.05em;
+}
+
+/* ── 7. Add Node menu (sidebar or pipeline's side panel) ────────────────── */
+#add-node-panel {
+  border-top: 2px solid var(--primary-neon);
+  padding: 12px;
+  max-height: 40%; overflow-y: auto;
+  background: var(--surface-container);
+}
+#add-node-panel h3 {
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--secondary-neon); margin-bottom: 8px;
+}
+#add-node-menu { display: flex; flex-direction: column; gap: 2px; }
+.menu-category {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--secondary-neon);
+  padding: 8px 6px 4px;
+  border-top: 1px solid var(--outline-variant);
+  margin-top: 4px;
+}
+.menu-category:first-child { border-top: none; margin-top: 0; }
+.menu-item {
+  padding: 6px 10px; cursor: pointer;
+  font-size: 11px; color: var(--on-surface);
+  font-family: 'Space Grotesk', monospace;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  border: 2px solid transparent;
+  transition: background 0.1s, border-color 0.1s, transform 0.1s, box-shadow 0.1s;
+}
+.menu-item:hover {
+  background: var(--surface-lowest);
+  border-color: var(--primary-neon);
+  color: var(--primary-neon);
+  box-shadow: 2px 2px 0 0 var(--primary-neon);
+}
+
+/* ── 8. Toolbar (sidebar bottom or any toolbar row) ──────────────────────── */
+#toolbar {
+  padding: 10px 14px;
+  border-top: 2px solid var(--primary-neon);
+  display: flex; flex-wrap: wrap; gap: 8px;
+  background: var(--surface-container);
+}
+#toolbar > button, .toolbar-btn {
+  background: var(--surface-lowest);
+  border: 2px solid var(--border);
+  color: var(--on-surface);
+  padding: 6px 10px;
+  font-family: 'Space Grotesk', monospace;
+  font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s, color 0.1s;
+  box-shadow: 2px 2px 0 0 var(--border);
+}
+#toolbar > button:hover, .toolbar-btn:hover {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 0 var(--border);
+  color: var(--primary-neon);
+}
+#toolbar > button.active {
+  background: var(--primary-neon); color: #013a00;
+  box-shadow: 2px 2px 0 0 var(--border);
+}
+#toolbar > button:active { transform: translate(2px, 2px); box-shadow: none; }
+
+/* ── 9. Drop zone (3D viewport overlay) ─────────────────────────────────── */
+#drop-zone {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  display: none; align-items: center; justify-content: center;
+  background: rgba(2, 230, 0, 0.08);
+  border: 3px dashed var(--primary-neon);
+  z-index: 100; pointer-events: none;
+}
+#drop-zone.active { display: flex; }
+#drop-zone-text {
+  color: var(--primary-neon);
+  font-size: 18px; font-weight: 700;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  text-transform: uppercase; letter-spacing: 0.05em;
+  font-family: 'Space Grotesk', monospace;
+}
+
+/* ── 10. Node cards (brutalist — covers .node-card + .shader-node) ──────── */
+.node-card, .shader-node {
+  background: var(--surface-container);
+  border: 2px solid var(--border);
+  box-shadow: 4px 4px 0 0 var(--primary-neon);
+  padding: 0; margin-bottom: 14px;
+  min-width: 220px;
+  font-family: 'Space Grotesk', monospace;
+  user-select: none;
+  transition: transform 0.1s, box-shadow 0.1s;
+  border-radius: 0; font-size: 11px;
+  color: var(--on-surface);
+}
+.node-card:hover, .shader-node:hover {
+  box-shadow: 6px 6px 0 0 var(--primary-neon), 0 0 20px rgba(2, 230, 0, 0.4);
+  transform: translate(-1px, -1px);
+}
+.node-card > .node-header,
+.shader-node > .node-header {
+  background: var(--primary-neon);
+  color: #013a00;
+  font-weight: 700; font-size: 11px;
+  text-transform: uppercase; padding: 6px 10px;
+  border-bottom: 2px solid var(--border);
+  letter-spacing: 0.04em;
+  display: flex; justify-content: space-between; align-items: center;
+  cursor: grab;
+}
+.node-card-yellow > .node-header { background: var(--secondary-neon); color: #3a3000; }
+.node-card-error  > .node-header { background: var(--error-neon);     color: #690005; }
+
+.node-inputs, .node-outputs {
+  padding: 6px 10px; font-size: 10px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.node-inputs  { background: rgba(2, 230, 0, 0.04); border-bottom: 1px solid var(--outline-variant); }
+.node-outputs { background: rgba(255, 225, 109, 0.04); }
+.node-inputs .pin-row,
+.node-outputs .pin-row {
+  display: flex; align-items: center; gap: 8px;
+}
+.node-outputs .pin-row { justify-content: flex-end; }
+
+.pin-dot {
+  width: 8px; height: 8px; border-radius: 9999px;
+  background: var(--primary-neon);
+  box-shadow: 0 0 6px var(--primary-neon);
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+.pin-dot.out { background: var(--secondary-neon); box-shadow: 0 0 6px var(--secondary-neon); }
+
+.node-card .node-body, .shader-node .node-body {
+  padding: 10px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.node-card .node-body label,
+.shader-node .node-body label {
+  font-size: 10px; text-transform: uppercase;
+  color: var(--on-surface-variant);
+  letter-spacing: 0.05em;
+  font-family: 'Space Grotesk', monospace;
+}
+.node-card .node-input, .shader-node .node-input {
+  background: var(--surface-lowest);
+  border: 2px solid var(--outline-variant);
+  color: var(--on-surface);
+  padding: 4px 6px;
+  font-size: 11px; font-family: 'Plus Jakarta Sans', system-ui;
+  width: 100%; border-radius: 0;
+}
+.node-card .node-input:focus, .shader-node .node-input:focus {
+  outline: none; border-color: var(--primary-neon);
+}
+
+.run-node-btn {
+  background: var(--surface-lowest);
+  border: 2px solid var(--primary-neon);
+  color: var(--primary-neon);
+  padding: 6px 10px;
+  font-weight: 700; font-size: 10px;
+  text-transform: uppercase;
+  cursor: pointer; letter-spacing: 0.05em;
+  transition: transform 0.1s, box-shadow 0.1s;
+  box-shadow: 2px 2px 0 0 var(--primary-neon);
+  margin: 4px 10px 10px;
+  font-family: 'Space Grotesk', monospace;
+  display: block;
+  width: calc(100% - 20px);
+  border-radius: 0;
+}
+.run-node-btn:hover { transform: translate(1px, 1px); box-shadow: 1px 1px 0 0 var(--primary-neon); }
+.run-node-btn:active { transform: translate(2px, 2px); box-shadow: none; }
+
+/* ── 11. StateDebug panel (collapsible) ─────────────────────────────────── */
+#state-debug-panel {
+  border-top: 2px solid var(--primary-neon);
+  padding: 10px;
+  font-family: 'Space Grotesk', monospace;
+  font-size: 10px;
+  color: var(--on-surface-variant);
+  max-height: 160px; overflow: hidden;
+  background: var(--surface-container);
+}
+#state-debug-toggle {
+  cursor: pointer;
+  color: var(--secondary-neon);
+  margin-bottom: 6px;
+  user-select: none;
+  text-transform: uppercase; font-weight: 700;
+  letter-spacing: 0.05em;
+}
+#state-debug-body { display: none; line-height: 1.6; }
+#state-debug-body div span { color: var(--on-surface); }
+
+/* ── 12. Properties panel inputs (live highlight on change) ──────────────── */
+.prop-input.is-changed {
+  background: var(--primary-fixed-dim, var(--primary-neon));
+  color: #013a00;
+  transition: background 0.18s ease;
+}
+
+/* ── 13. Lass overlay canvas ─────────────────────────────────────────────── */
+#lassoOverlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; pointer-events: none; z-index: 10; }
+
+/* ── 14. Noodle path styling ─────────────────────────────────────────────── */
+.noodle-path {
+  stroke-dasharray: 10;
+  animation: dash 30s linear infinite;
+}
+@keyframes dash { to { stroke-dashoffset: -1000; } }
+
+/* Sticky selection indicator */
+#sticky-indicator {
+  font-size: 10px;
+  color: var(--on-surface-variant);
+  padding: 6px;
+  align-self: center;
+  font-family: 'Space Grotesk', monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ── 15. Pipeline page–specific rules (overrides) ───────────────────────── */
+/* These only apply when the pipeline HTML loads. */
+#pipeline-page .node-graph-area { background: var(--bg); background-image: none; flex: 1; }
+#pipeline-page .toolbar-pipeline { border-top: 2px solid var(--primary-neon); padding: 8px 14px; background: var(--surface-container); display: flex; gap: 8px; font-family: 'Space Grotesk', monospace; align-items: center; }
+#pipeline-page .proximity-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--on-surface-variant); margin-left: auto; }
+
+/* ── 16. Page body shell (replaces `bg-surface text-on-surface ... flex flex-col`) ── */
+/* Apply via <body class="bs-body-shell"> on EVERY page (index/pipeline/studio/scene/
+   main/nodearchitect/usecase/node). The shared nav.js adds `.has-bs-nav` after it
+   inserts its bar, which stacks `padding-top: 56px` on top for the viewport. */
+.bs-body-shell {
+  background: var(--bg);
+  color: var(--on-surface);
+  display: flex; flex-direction: column;
+  height: 100vh; width: 100vw;
+  overflow: hidden;
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+}
+::selection { background: var(--primary-neon); color: var(--border); }
+
+/* ── 17. Page main flex container (replaces `flex flex-1 pt-16 overflow-hidden`) ── */
+.bs-page { display: flex; flex: 1; overflow: hidden; min-height: 0; position: relative; }
+
+/* ── 18. Aside columns (left/right sidebars) ─────────────────────────────── */
+/* Left aside ~256px, right aside ~320px (Properties). Pages can override with
+   `--aside-w` on the element. The `aside > *` vertical layout works for
+   nav.js-injected pages that don't have an aside per-handler. */
+.bs-aside {
+  --aside-w: 256px;
+  width: var(--aside-w);
+  background: var(--surface-lowest);
+  border: 2px solid var(--outline-variant);
+  display: flex; flex-direction: column;
+  padding: 16px;
+  font-family: 'Space Grotesk', monospace;
+  color: var(--on-surface);
+  flex-shrink: 0;
+}
+.bs-aside--left  { border-right: 2px solid var(--outline-variant); }
+.bs-aside--right { --aside-w: 320px; border-left: 2px solid var(--outline-variant); padding: 24px; overflow-y: auto; }
+
+.bs-aside-tag {
+  color: var(--secondary-neon);
+  font-weight: 700; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+.bs-aside-version {
+  color: var(--on-surface-variant);
+  font-size: 10px; opacity: 0.6;
+  margin-bottom: 24px;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.bs-aside-section-title {
+  display: flex; align-items: center; justify-content: space-between;
+  color: var(--primary-neon); font-weight: 700; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  margin-bottom: 8px;
+}
+.bs-aside-section { flex: 1; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
+.bs-aside-cta { margin-top: auto; padding-top: 16px; border-top: 2px solid var(--outline-variant); }
+.bs-aside-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px; width: 100%; text-align: left;
+  background: transparent;
+  border: 2px solid transparent;
+  color: var(--on-surface-variant);
+  font-family: 'Space Grotesk', monospace;
+  font-size: 10px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s, transform 0.1s, box-shadow 0.1s;
+}
+.bs-aside-row:hover {
+  background: var(--surface-container);
+  color: var(--primary-neon);
+}
+.bs-aside-row.is-active {
+  background: var(--primary-neon);
+  color: var(--border);
+  border-color: var(--primary-neon);
+  font-weight: 700;
+  box-shadow: 2px 2px 0 0 var(--border);
+  transform: scale(0.97);
+}
+.bs-aside-link {
+  display: inline-flex; align-items: center; gap: 8px;
+  color: var(--on-surface-variant);
+  font-family: 'Space Grotesk', monospace;
+  font-size: 10px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  text-decoration: none;
+}
+.bs-aside-link:hover { color: var(--primary-neon); }
+
+/* ── 19. Viewport (center column with 3D canvas + grid bg + overlays) ────── */
+.bs-viewport {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+}
+.bs-radial-bg {
+  position: absolute; inset: 0; z-index: 0;
+  background: radial-gradient(circle at center, #1a2e1a 0%, var(--bg) 70%);
+  pointer-events: none;
+}
+.bs-grid-bg {
+  position: absolute; inset: 0; z-index: 0;
+  pointer-events: none;
+  background-color: transparent;
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--primary-neon) 10%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--primary-neon) 10%, transparent) 1px, transparent 1px);
+  background-size: 40px 40px;
+  transform: perspective(1000px) rotateX(60deg) translateY(-200px) scale(2);
+  animation: bs-grid-pulse 4s infinite ease-in-out;
+}
+@keyframes bs-grid-pulse { 0% { opacity: 0.3; } 50% { opacity: 0.6; } 100% { opacity: 0.3; } }
+.bs-viewport-label {
+  position: absolute; top: 16px; left: 16px; z-index: 10;
+  padding: 8px 16px;
+  background: var(--surface-container-highest);
+  border: 2px solid var(--primary-neon);
+  color: var(--primary-neon);
+  font-family: 'Space Grotesk', monospace;
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  backdrop-filter: blur(8px);
+}
+.bs-viewport-stat {
+  position: absolute; bottom: 16px; right: 16px; z-index: 10;
+  padding: 4px 12px;
+  background: color-mix(in srgb, var(--surface-lowest) 80%, transparent);
+  border: 1px solid var(--outline-variant);
+  color: var(--on-surface-variant);
+  font-family: 'Space Grotesk', monospace;
+  font-size: 10px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.bs-viewport-stat .bs-stat-value { color: var(--primary-neon); }
+.bs-controls-hint {
+  position: absolute; bottom: 4px; left: 4px; z-index: 30;
+  padding: 4px 8px;
+  background: color-mix(in srgb, var(--surface-lowest) 70%, transparent);
+  border: 1px solid var(--outline-variant);
+  color: var(--outline-variant);
+  font-family: 'Space Grotesk', monospace;
+  font-size: 10px;
+  pointer-events: none; user-select: none;
+}
+
+/* ── 20. Gizmo toolbar (floating bottom-center) ──────────────────────────── */
+.bs-gizmo-toolbar {
+  position: absolute; bottom: 32px; left: 50%;
+  transform: translateX(-50%);
+  display: flex; align-items: center;
+  background: var(--surface-container-highest);
+  border: 2px solid var(--outline-variant);
+  padding: 8px;
+  box-shadow: 8px 8px 0 0 var(--border);
+  z-index: 20;
+}
+.bs-gizmo-btn {
+  padding: 12px;
+  background: transparent;
+  border: none; border-right: 2px solid var(--outline-variant);
+  color: var(--on-surface);
+  font-family: inherit; font-size: 24px;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.1s, color 0.1s;
+}
+.bs-gizmo-btn:last-child { border-right: none; }
+.bs-gizmo-btn:hover, .bs-gizmo-btn.is-active {
+  background: var(--primary-neon);
+  color: var(--border);
+}
+.bs-gizmo-btn::before {
+  content: attr(data-tip);
+  position: absolute; bottom: 100%; left: 50%;
+  transform: translate(-50%, -4px);
+  background: var(--surface-lowest);
+  border: 1px solid var(--primary-neon);
+  padding: 2px 6px; white-space: nowrap;
+  color: var(--primary-neon);
+  font-family: 'Space Grotesk', monospace;
+  font-size: 10px; letter-spacing: 0.04em;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.1s;
+}
+.bs-gizmo-btn:hover::before { opacity: 1; }
+
+/* ── 21. Status bar (footer) ─────────────────────────────────────────────── */
+.bs-statusbar {
+  height: 32px;
+  background: var(--surface-lowest);
+  border-top: 2px solid var(--outline-variant);
+  padding: 0 32px;
+  display: flex; align-items: center; justify-content: space-between;
+  font-family: 'Space Grotesk', monospace;
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.04em;
+  color: var(--on-surface-variant);
+  flex-shrink: 0; z-index: 50;
+}
+.bs-statusbar-segment { display: flex; align-items: center; gap: 24px; }
+.bs-statusbar-dot {
+  width: 8px; height: 8px; border-radius: 9999px;
+  background: var(--primary-neon);
+  animation: bs-ping 1.4s infinite ease-in-out;
+}
+@keyframes bs-ping { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+.bs-statusbar-fps-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 2px 12px;
+  background: var(--surface-container-highest);
+  border: 1px solid var(--outline-variant);
+}
+.bs-neon { color: var(--primary-neon); }
+
+/* ── 22. Modal (replaces textgen-modal, primitive-menu, architect-modal) ── */
+/* Toggle with `hidden` attribute (preferred) or use `data-bs-modal` JS API. */
+.bs-modal {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--bg) 80%, transparent);
+  backdrop-filter: blur(4px);
+  padding: 16px;
+}
+.bs-modal[hidden] { display: none; }
+.bs-modal__panel {
+  position: relative;
+  background: var(--surface-lowest);
+  border: 4px solid var(--primary-neon);
+  box-shadow: 12px 12px 0 0 var(--border);
+  width: 100%; max-width: 480px;
+  font-family: 'Space Grotesk', monospace;
+  color: var(--on-surface);
+}
+.bs-modal__panel.is-enter {
+  animation: bs-modal-enter 0.18s cubic-bezier(.2,.9,.3,1.1);
+}
+@keyframes bs-modal-enter {
+  from { transform: scale(0.92); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+.bs-modal__alpha-tag {
+  position: absolute; top: -16px; left: -16px; z-index: 2;
+  background: var(--secondary-neon); color: var(--border);
+  border: 2px solid var(--border);
+  box-shadow: 4px 4px 0 0 var(--border);
+  padding: 4px 12px;
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.bs-modal__header {
+  padding: 24px;
+  border-bottom: 2px solid var(--outline-variant);
+  display: flex; justify-content: space-between; align-items: flex-start;
+}
+.bs-modal__title {
+  font-family: 'Anybody', sans-serif;
+  font-weight: 700; font-size: 24px;
+  text-transform: uppercase; letter-spacing: -0.02em;
+  color: var(--primary-neon);
+}
+.bs-modal__subtitle {
+  font-size: 10px;
+  color: var(--on-surface-variant);
+  margin-top: 4px;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  opacity: 0.6;
+}
+.bs-modal__close {
+  background: transparent; border: none;
+  color: var(--on-surface-variant); cursor: pointer;
+  font-family: inherit; font-size: 24px;
+  transition: color 0.1s;
+  padding: 4px;
+}
+.bs-modal__close:hover { color: var(--primary-neon); }
+.bs-modal__body { padding: 32px; display: flex; flex-direction: column; gap: 32px; }
+.bs-modal__footer {
+  padding: 24px;
+  background: var(--surface-container);
+  border-top: 2px solid var(--outline-variant);
+  display: flex; gap: 16px;
+}
+
+/* Variants (textgen uses max-width: lg, primitive-menu uses fixed 480px width) */
+.bs-modal__panel--lg { max-width: 640px; }
+.bs-modal__panel--wide { max-width: none; width: 480px; }
+
+/* ── 23. Properties row (Transform section: 3-axis inputs) ───────────────── */
+.bs-prop-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  align-items: center;
+  gap: 8px;
+}
+.bs-prop-label {
+  font-family: 'Space Grotesk', monospace;
+  font-size: 12px;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--on-surface-variant);
+}
+.bs-prop-input {
+  background: var(--surface-lowest);
+  border: 1px solid var(--outline-variant);
+  color: var(--primary-neon);
+  font-family: 'Space Grotesk', monospace;
+  font-size: 12px;
+  text-align: center;
+  padding: 4px;
+  width: 100%; outline: none;
+}
+.bs-prop-input.is-changed {
+  background: var(--primary-neon);
+  color: var(--border);
+  transition: background 0.18s ease;
+}
+
+/* ── 24. CTA buttons (primary = yellow w/ hard shadow; secondary = green-border) */
+.bs-cta-primary {
+  background: var(--secondary-neon);
+  color: var(--border);
+  border: 2px solid var(--border);
+  padding: 12px;
+  font-family: 'Space Grotesk', monospace;
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  cursor: pointer;
+  box-shadow: 4px 4px 0 0 var(--border);
+  transition: transform 0.1s, box-shadow 0.1s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  flex: 1;
+}
+.bs-cta-primary:hover    { transform: translate(1px, 1px); box-shadow: 3px 3px 0 0 var(--border); }
+.bs-cta-primary:active   { transform: translate(2px, 2px); box-shadow: 0 0 0 0 var(--border); }
+.bs-cta-secondary {
+  background: var(--surface-lowest);
+  color: var(--primary-neon);
+  border: 2px solid var(--primary-neon);
+  padding: 12px;
+  font-family: 'Space Grotesk', monospace;
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 0 var(--primary-neon);
+  transition: transform 0.1s, box-shadow 0.1s;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+}
+.bs-cta-secondary:hover  { transform: translate(1px, 1px); box-shadow: 2px 2px 0 0 var(--primary-neon); }
+.bs-cta-secondary:active { transform: translate(2px, 2px); box-shadow: none; }
+.bs-cta-ghost {
+  background: transparent;
+  color: var(--on-surface-variant);
+  border: 2px solid var(--outline-variant);
+  padding: 12px 32px;
+  font-family: 'Space Grotesk', monospace;
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: border-color 0.1s, color 0.1s, background 0.1s;
+}
+.bs-cta-ghost:hover {
+  background: var(--surface-container-highest);
+  border-color: var(--primary-neon);
+  color: var(--primary-neon);
+}
+.bs-cta-full { width: 100%; }
+
+/* ── 25. Form inputs ─────────────────────────────────────────────────────── */
+.bs-input {
+  background: var(--surface-container);
+  border: 2px solid var(--outline-variant);
+  color: var(--primary-neon);
+  font-family: 'Anybody', sans-serif;
+  font-weight: 700; font-size: 24px;
+  padding: 16px;
+  width: 100%; outline: none;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  transition: border-color 0.1s;
+}
+.bs-input:focus { border-color: var(--primary-neon); }
+.bs-select {
+  background: var(--surface-lowest);
+  border: 2px solid var(--outline-variant);
+  color: var(--primary-neon);
+  font-family: 'Space Grotesk', monospace;
+  font-size: 12px;
+  padding: 8px;
+  width: 100%; outline: none;
+}
+.bs-select:focus { border-color: var(--primary-neon); }
+.bs-label {
+  display: block;
+  font-family: 'Space Grotesk', monospace;
+  font-size: 11px; font-weight: 700;
+  color: var(--on-surface-variant);
+  text-transform: uppercase; letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+input[type="range"].bs-range {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 4px;
+  background: var(--surface-container-high);
+  outline: none;
+  border: 1px solid var(--outline-variant);
+}
+input[type="range"].bs-range::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  background: var(--primary-neon);
+  border: 2px solid var(--border);
+  width: 16px; height: 16px;
+  cursor: pointer;
+}
+input[type="range"].bs-range::-moz-range-thumb {
+  background: var(--primary-neon);
+  border: 2px solid var(--border);
+  width: 16px; height: 16px;
+  cursor: pointer;
+}
+
+/* ── 26. Section header (collapsible Properties blocks) ──────────────────── */
+.bs-section { display: flex; flex-direction: column; gap: 16px; }
+.bs-section + .bs-section { margin-top: 40px; }
+.bs-section-header {
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--outline-variant);
+  padding-bottom: 8px;
+  font-family: 'Space Grotesk', monospace;
+  font-size: 11px; font-weight: 700;
+  color: var(--on-surface-variant);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+
+/* ── 27. Card (Material property card) ───────────────────────────────────── */
+.bs-card {
+  padding: 16px;
+  background: var(--surface-container-high);
+  border: 2px solid var(--outline-variant);
+  display: flex; flex-direction: column; gap: 16px;
+}
+.bs-card-thumb {
+  width: 100%; aspect-ratio: 1;
+  background: linear-gradient(135deg, var(--primary-neon), var(--border));
+  border: 1px solid var(--primary-neon);
+  position: relative; overflow: hidden;
+  animation: bs-thumb-pulse 1.6s infinite ease-in-out;
+  cursor: pointer;
+}
+@keyframes bs-thumb-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+.bs-card-thumb-overlay {
+  position: absolute; inset: 0;
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: opacity 0.1s;
+}
+.bs-card-thumb:hover .bs-card-thumb-overlay { opacity: 1; }
+
+/* ── 28. Tab list (usecase.html left sidebar tabbed controls) ────────────── */
+.bs-tab-list { display: flex; flex-direction: column; }
+.bs-tab {
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px;
+  background: transparent; border: none;
+  border-left: 4px solid transparent;
+  color: var(--on-surface-variant);
+  font-family: 'Space Grotesk', monospace;
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s, color 0.12s, border-left-color 0.12s;
+}
+.bs-tab:hover {
+  background: var(--surface-container);
+  border-left-color: var(--outline-variant);
+  color: var(--primary-neon);
+}
+.bs-tab.is-active {
+  background: var(--surface-container);
+  border-left-color: var(--primary-neon);
+  color: var(--primary-neon);
+}
+
+.bs-uc-panel { display: none; font-family: 'Space Grotesk', monospace; font-size: 11px; }
+.bs-uc-panel.is-active { display: block; }
+.bs-uc-panel h2 {
+  font-family: 'Anybody', sans-serif;
+  font-weight: 700; font-size: 24px;
+  text-transform: uppercase; letter-spacing: -0.02em;
+  color: var(--primary-neon); margin-bottom: 8px;
+}
+.bs-uc-panel p { color: var(--on-surface-variant); opacity: 0.8; margin-bottom: 16px; }
+
+.bs-tab-header {
+  padding: 16px;
+  display: flex; align-items: center; gap: 8px;
+  color: var(--primary-neon); font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  border-bottom: 2px solid var(--outline-variant);
+}
+
+/* ── 29. Console (code-log viewer for usecase.html) ─────────────────────── */
+.bs-console {
+  height: 192px;
+  padding: 12px;
+  background: var(--surface-lowest);
+  border-top: 2px solid var(--outline-variant);
+  font-family: 'Space Grotesk', monospace;
+  font-size: 11px;
+  color: var(--on-surface-variant);
+  overflow-y: auto;
+}
+.bs-console__header {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--primary-neon);
+  font-weight: 700; margin-bottom: 8px;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.bs-console__line { margin-bottom: 2px; }
+.bs-console__line.is-fresh {
+  animation: bs-console-flash 0.8s ease-out;
+}
+@keyframes bs-console-flash {
+  0%   { background: color-mix(in srgb, var(--primary-neon) 18%, transparent); }
+  100% { background: transparent; }
+}
+
+/* ── 30. Status dot (RUST / GO loading indicator inside nav, etc.) ───────── */
+.bs-status-dot {
+  width: 8px; height: 8px; border-radius: 9999px;
+  animation: bs-ping 1.2s infinite ease-in-out;
+}
+.bs-status-dot--loading { background: var(--secondary-neon); }
+.bs-status-dot--ok      { background: var(--primary-neon); }
+.bs-status-dot--error   { background: var(--error-neon); }
+.bs-nav-status {
+  display: inline-flex; align-items: center; gap: 12px;
+  padding: 8px 16px;
+  background: var(--surface-lowest);
+  border: 2px solid var(--outline-variant);
+  font-family: 'Space Grotesk', monospace;
+  font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--on-surface-variant);
+}
+.bs-nav-status__group { display: inline-flex; align-items: center; gap: 6px; }
+.bs-nav-status__sep   { color: var(--outline-variant); }
+
+/* ── 31. Page-id-prefixed overrides ─────────────────────────────────────── */
+/* Pip install the lib. node.html already builds its own layout; no migration needed. */
+#nodearchitect-page .bs-modal__panel { max-width: 1024px; }
+
+/* ── 32. Material Symbols default weight/grade (used everywhere) ───────── */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+/* ── 33. Global brutalist scrollbars (page-level) ───────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--outline-variant); }
+::-webkit-scrollbar-thumb:hover { background: var(--primary-neon); }
+

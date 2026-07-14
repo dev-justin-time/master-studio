@@ -1,0 +1,22 @@
+# Windows reserved-name artifact (created by accidental shell redirection).
+# `nul` is a Windows device name and cannot be staged by git.
+nul
+
+# ── Node / npm ──────────────────────────────────────────────
+node_modules/
+
+# ── Logs ────────────────────────────────────────────────────
+*.log
+
+# ── Environment files ───────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── WASM build artifacts ────────────────────────────────────
+# Rust target/ inside each wasm/* project + wasm-pack / Go WASM output
+wasm/*/target/
+wasm/pkg/
+
+# NOTE: `dist/` is intentionally tracked — the built assets (WASM binaries,
+# wasm_exec.js, vite bundle) are runtime dependencies of the deployed app.

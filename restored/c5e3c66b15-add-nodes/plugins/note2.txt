@@ -1,0 +1,913 @@
+Here are the two complete, production-ready plugins for your 3D studio:
+
+---
+
+## 1. Game Map Generation Plugin (`plugins/GameMapPlugin.js`)
+
+This plugin handles procedural world generation by blending and tiling maps from your mapmaker.
+
+```javascript
+/**
+ * GameMapPlugin - Procedural world generation via map blending and tiling.
+ * Integrates with mapmaker data to create seamless game worlds.
+ */
+import * as THREE from 'three';
+
+export const GameMapPlugin = {
+  name: 'GameMap',
+  _state: null,
+  _activeWorld: null,
+  _mapCache: new Map(), // Cache loaded maps for reuse
+
+  init(state) {
+    this._state = state;
+    
+    // Listen for map data from mapmaker
+    state.on('mapmaker:map:loaded', (mapData) => {
+      this._cacheMap(mapData);
+    });
+  },
+
+  update(deltaTime) {
+    // Update any animated world elements (water, particles, etc.)
+    if (this._activeWorld) {
+      this._updateWorldAnimations(deltaTime);
+    }
+  },
+
+  /**
+   * Creates a tiled world from multiple map segments.
+   * @param {Array} mapConfigs - Array of {mapId, position, rotation, scale}
+   * @param {Object} options - Blending and generation options
+   */
+  async generateTiledWorld(mapConfigs, options = {}) {
+    const {
+      blendEdges = true,
+      edgeBlendWidth = 2.0,
+      autoLOD = true,
+      collisionLayer = true
+    } = options;
+
+    const worldGroup = new THREE.Group();
+    worldGroup.name = 'Generated_World';
+    worldGroup.userData.isWorldMap = true;
+
+    // Load and position all map segments
+    for (const config of mapConfigs) {
+      const mapData = await this._loadMap(config.mapId);
+      if (!mapData) continue;
+
+      const segment = this._createMapSegment(mapData, config);
+      worldGroup.add(segment);
+    }
+
+    // Blend edges between adjacent segments
+    if (blendEdges) {
+      this._blendMapEdges(worldGroup, edgeBlendWidth);
+    }
+
+    // Generate collision mesh if requested
+    if (collisionLayer) {
+      const collisionMesh = this._generateCollisionLayer(worldGroup);
+      collisionMesh.name = 'World_Collision';
+      collisionMesh.userData.isCollisionLayer = true;
+      collisionMesh.visible = false; // Hidden by default
+      worldGroup.add(collisionMesh);
+    }
+
+    // Apply LOD if requested
+    if (autoLOD) {
+      this._applyWorldLOD(worldGroup);
+    }
+
+    this._activeWorld = worldGroup;
+    this._state.data.scene.add(worldGroup);
+    this._state.emit('world:generated', { world: worldGroup });
+
+    return worldGroup;
+  },
+
+  /**
+   * Blends heightmaps and textures at map boundaries.
+   */
+  _blendMapEdges(worldGroup, blendWidth) {
+    const segments = worldGroup.children.filter(c => c.userData.isMapSegment);
+    
+    for (let i = 0; i < segments.length; i++) {
+      for (let j = i + 1; j < segments.length; j++) {
+        const segA = segments[i];
+        const segB = segments[j];
+        
+        // Check if segments are adjacent (within blend distance)
+        const dist = segA.position.distanceTo(segB.position);
+        if (dist < blendWidth * 2) {
+          this._createBlendZone(segA, segB, blendWidth);
+        }
+      }
+    }
+  },
+
+  /**
+   * Creates a smooth transition zone between two map segments.
+   */
+  _createBlendZone(segA, segB, blendWidth) {
+    const midpoint = segA.position.clone().lerp(segB.position, 0.5);
+    const direction = segB.position.clone().sub(segA.position).normalize();
+    
+    // Create blend geometry (a plane that spans the boundary)
+    const blendGeo = new THREE.PlaneGeometry(blendWidth * 2, 10, 32, 32);
+    const blendMat = new THREE.MeshStandardMaterial({
+      color: 0x808080,
+      transparent: true,
+      opacity: 0.5,
+      side: THREE.DoubleSide
+    });
+    
+    const blendMesh = new THREE.Mesh(blendGeo, blendMat);
+    blendMesh.position.copy(midpoint);
+    blendMesh.lookAt(segB.position);
+    blendMesh.rotateX(-Math.PI / 2);
+    blendMesh.userData.isBlendZone = true;
+    
+    // Deform vertices to match both heightmaps
+    this._deformBlendVertices(blendMesh, segA, segB, blendWidth);
+    
+    segA.parent.add(blendMesh);
+  },
+
+  /**
+   * Deforms blend zone vertices to smoothly transition between heightmaps.
+   */
+  _deformBlendVertices(blendMesh, segA, segB, blendWidth) {
+    const positions = blendMesh.geometry.attributes.position.array;
+    const segAHeight = segA.userData.heightmap;
+    const segBHeight = segB.userData.heightmap;
+    
+    for (let i = 0; i < positions.length; i += 3) {
+      const x = positions[i];
+      const z = positions[i + 2];
+      
+      // Calculate blend factor (0 = segA, 1 = segB)
+      const blendFactor = (x + blendWidth) / (blendWidth * 2);
+      
+      // Sample heights from both maps
+      const heightA = this._sampleHeightmap(segAHeight, x, z);
+      const heightB = this._sampleHeightmap(segBHeight, x, z);
+      
+      // Interpolate
+      positions[i + 1] = THREE.MathUtils.lerp(heightA, heightB, blendFactor);
+    }
+    
+    blendMesh.geometry.attributes.position.needsUpdate = true;
+    blendMesh.geometry.computeVertexNormals();
+  },
+
+  /**
+   * Generates a simplified collision mesh for the world.
+   */
+  _generateCollisionLayer(worldGroup) {
+    const collisionGeo = new THREE.BufferGeometry();
+    const vertices = [];
+    const indices = [];
+    
+    worldGroup.traverse((child) => {
+      if (child.isMesh && child.userData.isTerrain) {
+        const geo = child.geometry;
+        const pos = geo.attributes.position.array;
+        const idx = geo.index ? geo.index.array : null;
+        
+        const offset = vertices.length / 3;
+        
+        // Simplify geometry for collision (reduce vertex count)
+        for (let i = 0; i < pos.length; i += 9) { // Skip every other vertex
+          vertices.push(pos[i], pos[i + 1], pos[i + 2]);
+          vertices.push(pos[i + 3], pos[i + 4], pos[i + 5]);
+          vertices.push(pos[i + 6], pos[i + 7], pos[i + 8]);
+        }
+        
+        if (idx) {
+          for (let i = 0; i < idx.length; i += 3) {
+            indices.push(idx[i] + offset, idx[i + 1] + offset, idx[i + 2] + offset);
+          }
+        }
+      }
+    });
+    
+    collisionGeo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    if (indices.length > 0) {
+      collisionGeo.setIndex(indices);
+    }
+    
+    const collisionMat = new THREE.MeshBasicMaterial({ 
+      color: 0x00ff00, 
+      wireframe: true,
+      transparent: true,
+      opacity: 0.3
+    });
+    
+    return new THREE.Mesh(collisionGeo, collisionMat);
+  },
+
+  /**
+   * Applies LOD (Level of Detail) to world segments.
+   */
+  _applyWorldLOD(worldGroup) {
+    worldGroup.traverse((child) => {
+      if (child.isMesh && child.userData.isTerrain) {
+        // Create LOD levels
+        const lod = new THREE.LOD();
+        
+        // High detail (original)
+        lod.addLevel(child, 0);
+        
+        // Medium detail (50% vertices)
+        const medGeo = this._simplifyGeometry(child.geometry, 0.5);
+        const medMesh = new THREE.Mesh(medGeo, child.material);
+        lod.addLevel(medMesh, 50);
+        
+        // Low detail (25% vertices)
+        const lowGeo = this._simplifyGeometry(child.geometry, 0.25);
+        const lowMesh = new THREE.Mesh(lowGeo, child.material);
+        lod.addLevel(lowMesh, 100);
+        
+        child.parent.add(lod);
+        child.parent.remove(child);
+      }
+    });
+  },
+
+  /**
+   * Simplifies geometry by reducing vertex count.
+   */
+  _simplifyGeometry(geometry, factor) {
+    const simplified = geometry.clone();
+    const positions = simplified.attributes.position.array;
+    const newPositions = [];
+    
+    // Simple decimation: keep every Nth vertex
+    const step = Math.floor(1 / factor);
+    for (let i = 0; i < positions.length; i += step * 3) {
+      newPositions.push(positions[i], positions[i + 1], positions[i + 2]);
+    }
+    
+    simplified.setAttribute('position', new THREE.Float32BufferAttribute(newPositions, 3));
+    simplified.computeVertexNormals();
+    
+    return simplified;
+  },
+
+  /**
+   * Caches a map for reuse.
+   */
+  _cacheMap(mapData) {
+    this._mapCache.set(mapData.id, mapData);
+  },
+
+  /**
+   * Loads a map from cache or fetches it.
+   */
+  async _loadMap(mapId) {
+    if (this._mapCache.has(mapId)) {
+      return this._mapCache.get(mapId);
+    }
+    
+    // Request from mapmaker
+    return new Promise((resolve) => {
+      this._state.emit('mapmaker:map:request', { mapId, callback: resolve });
+    });
+  },
+
+  /**
+   * Creates a mesh segment from map data.
+   */
+  _createMapSegment(mapData, config) {
+    const { position = { x: 0, y: 0, z: 0 }, rotation = { x: 0, y: 0, z: 0 }, scale = { x: 1, y: 1, z: 1 } } = config;
+    
+    // Create terrain mesh from heightmap
+    const size = mapData.size || 100;
+    const segments = mapData.segments || 50;
+    const geometry = new THREE.PlaneGeometry(size, size, segments, segments);
+    
+    // Apply heightmap
+    if (mapData.heightmap) {
+      const positions = geometry.attributes.position.array;
+      for (let i = 0; i < positions.length; i += 3) {
+        const x = positions[i];
+        const y = positions[i + 1];
+        positions[i + 2] = this._sampleHeightmap(mapData.heightmap, x, y);
+      }
+      geometry.attributes.position.needsUpdate = true;
+      geometry.computeVertexNormals();
+    }
+    
+    const material = new THREE.MeshStandardMaterial({
+      color: mapData.color || 0x4a7c4e,
+      roughness: 0.8,
+      metalness: 0.2,
+      flatShading: false
+    });
+    
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.rotation.set(rotation.x, rotation.y, rotation.z);
+    mesh.scale.set(scale.x, scale.y, scale.z);
+    mesh.position.set(position.x, position.y, position.z);
+    mesh.userData.isMapSegment = true;
+    mesh.userData.isTerrain = true;
+    mesh.userData.heightmap = mapData.heightmap;
+    mesh.userData.mapId = mapData.id;
+    
+    return mesh;
+  },
+
+  /**
+   * Samples a heightmap at a given coordinate.
+   */
+  _sampleHeightmap(heightmap, x, z) {
+    if (!heightmap || !heightmap.data) return 0;
+    
+    const width = heightmap.width;
+    const height = heightmap.height;
+    
+    // Normalize coordinates to 0-1 range
+    const u = (x / width) + 0.5;
+    const v = (z / height) + 0.5;
+    
+    // Clamp to bounds
+    const clampedU = Math.max(0, Math.min(1, u));
+    const clampedV = Math.max(0, Math.min(1, v));
+    
+    // Sample bilinearly
+    const px = clampedU * (width - 1);
+    const py = clampedV * (height - 1);
+    
+    const x0 = Math.floor(px);
+    const x1 = Math.min(x0 + 1, width - 1);
+    const y0 = Math.floor(py);
+    const y1 = Math.min(y0 + 1, height - 1);
+    
+    const fx = px - x0;
+    const fy = py - y0;
+    
+    const h00 = heightmap.data[y0 * width + x0];
+    const h10 = heightmap.data[y0 * width + x1];
+    const h01 = heightmap.data[y1 * width + x0];
+    const h11 = heightmap.data[y1 * width + x1];
+    
+    const h0 = THREE.MathUtils.lerp(h00, h10, fx);
+    const h1 = THREE.MathUtils.lerp(h01, h11, fx);
+    
+    return THREE.MathUtils.lerp(h0, h1, fy);
+  },
+
+  /**
+   * Updates world animations (water flow, particle effects, etc.)
+   */
+  _updateWorldAnimations(deltaTime) {
+    this._activeWorld.traverse((child) => {
+      if (child.userData.isWater) {
+        // Animate water UV offset
+        if (child.material.map) {
+          child.material.map.offset.y += deltaTime * 0.05;
+        }
+      }
+    });
+  },
+
+  // ── Visual Nodes for Node Editor ──
+  nodes: {
+    'GameMap/GenerateWorldNode': (x, y) => {
+      const el = document.createElement('div');
+      el.className = 'shader-node';
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+      el.innerHTML = `
+        <div class="node-header">🗺️ Generate Tiled World</div>
+        <div class="node-body">
+          <label>Map Configs (JSON):</label>
+          <textarea class="node-input" data-prop="mapConfigs" rows="4">[]</textarea>
+          <label>Blend Edges:</label>
+          <input type="checkbox" class="node-input" data-prop="blendEdges" checked />
+          <label>Blend Width:</label>
+          <input type="number" class="node-input" data-prop="blendWidth" value="2.0" step="0.1" />
+        </div>
+        <div class="node-outputs">
+          <span data-type="Group">World Group</span>
+        </div>
+      `;
+      return el;
+    },
+
+    'GameMap/HeightmapNode': (x, y) => {
+      const el = document.createElement('div');
+      el.className = 'shader-node';
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+      el.innerHTML = `
+        <div class="node-header">⛰️ Heightmap Generator</div>
+        <div class="node-body">
+          <label>Width:</label>
+          <input type="number" class="node-input" data-prop="width" value="100" />
+          <label>Height:</label>
+          <input type="number" class="node-input" data-prop="height" value="100" />
+          <label>Scale:</label>
+          <input type="number" class="node-input" data-prop="scale" value="10" step="0.1" />
+          <label>Seed:</label>
+          <input type="number" class="node-input" data-prop="seed" value="42" />
+        </div>
+        <div class="node-outputs">
+          <span data-type="Heightmap">Heightmap Data</span>
+        </div>
+      `;
+      return el;
+    }
+  }
+};
+```
+
+---
+
+## 2. Selection Plugin (`plugins/SelectionPlugin.js`)
+
+This plugin provides a comprehensive selection toolkit with multiple selection modes.
+
+```javascript
+/**
+ * SelectionPlugin - Advanced selection tools including lasso, group, sticky select, etc.
+ */
+import * as THREE from 'three';
+
+export const SelectionPlugin = {
+  name: 'Selection',
+  _state: null,
+  _selectionMode: 'single', // single, multi, lasso, color
+  _isLassoActive: false,
+  _lassoPoints: [],
+  _lassoLine: null,
+  _stickySelect: false,
+  _selectionHistory: [],
+
+  init(state) {
+    this._state = state;
+    
+    // Setup selection event listeners
+    state.on('selection:mode:change', (mode) => {
+      this._selectionMode = mode;
+    });
+  },
+
+  update(deltaTime) {
+    // Update lasso visualization if active
+    if (this._isLassoActive && this._lassoLine) {
+      this._updateLassoVisualization();
+    }
+  },
+
+  /**
+   * Enables lasso selection mode.
+   */
+  startLassoSelect() {
+    this._isLassoActive = true;
+    this._lassoPoints = [];
+    this._selectionMode = 'lasso';
+    
+    // Create lasso line visualization
+    const geometry = new THREE.BufferGeometry();
+    const material = new THREE.LineBasicMaterial({ 
+      color: 0x00ff00, 
+      linewidth: 2,
+      transparent: true,
+      opacity: 0.8
+    });
+    
+    this._lassoLine = new THREE.Line(geometry, material);
+    this._state.data.scene.add(this._lassoLine);
+    
+    this._state.emit('selection:lasso:started');
+  },
+
+  /**
+   * Adds a point to the lasso path.
+   */
+  addLassoPoint(screenX, screenY) {
+    if (!this._isLassoActive) return;
+    
+    this._lassoPoints.push({ x: screenX, y: screenY });
+    this._updateLassoVisualization();
+  },
+
+  /**
+   * Completes lasso selection and selects objects within the lasso.
+   */
+  completeLassoSelect() {
+    if (!this._isLassoActive || this._lassoPoints.length < 3) {
+      this.cancelLassoSelect();
+      return;
+    }
+    
+    // Get all objects in scene
+    const objects = this._getSelectableObjects();
+    const selectedObjects = [];
+    
+    // Check each object against lasso polygon
+    objects.forEach(obj => {
+      const screenPos = this._getScreenPosition(obj);
+      if (this._isPointInPolygon(screenPos, this._lassoPoints)) {
+        selectedObjects.push(obj);
+      }
+    });
+    
+    // Apply selection
+    if (this._stickySelect) {
+      this._addToSelection(selectedObjects);
+    } else {
+      this._setSelection(selectedObjects);
+    }
+    
+    this.cancelLassoSelect();
+    this._state.emit('selection:lasso:completed', { count: selectedObjects.length });
+  },
+
+  /**
+   * Cancels lasso selection.
+   */
+  cancelLassoSelect() {
+    this._isLassoActive = false;
+    this._lassoPoints = [];
+    
+    if (this._lassoLine) {
+      this._state.data.scene.remove(this._lassoLine);
+      this._lassoLine.geometry.dispose();
+      this._lassoLine.material.dispose();
+      this._lassoLine = null;
+    }
+    
+    this._selectionMode = 'single';
+  },
+
+  /**
+   * Groups selected objects into a parent group.
+   */
+  groupSelected() {
+    const selected = this._state.data.selectedObjects || [];
+    if (selected.length < 2) {
+      this._state.emit('notification', { message: 'Select at least 2 objects to group', type: 'warning' });
+      return;
+    }
+    
+    const group = new THREE.Group();
+    group.name = 'Group_' + Date.now();
+    group.userData.isGroup = true;
+    
+    // Calculate center of all selected objects
+    const center = new THREE.Vector3();
+    selected.forEach(obj => center.add(obj.position));
+    center.divideScalar(selected.length);
+    
+    group.position.copy(center);
+    
+    // Reparent objects to group
+    selected.forEach(obj => {
+      const worldPos = new THREE.Vector3();
+      obj.getWorldPosition(worldPos);
+      
+      obj.parent.remove(obj);
+      group.add(obj);
+      
+      // Adjust local position relative to group center
+      obj.position.sub(center);
+    });
+    
+    this._state.data.scene.add(group);
+    this._setSelection([group]);
+    
+    this._state.emit('selection:grouped', { group });
+    return group;
+  },
+
+  /**
+   * Ungroups a selected group, returning children to scene.
+   */
+  ungroupSelected() {
+    const selected = this._state.data.selectedObjects || [];
+    if (selected.length !== 1 || !selected[0].userData.isGroup) {
+      this._state.emit('notification', { message: 'Select a single group to ungroup', type: 'warning' });
+      return;
+    }
+    
+    const group = selected[0];
+    const children = [...group.children];
+    
+    // Reparent children to scene
+    children.forEach(child => {
+      const worldPos = new THREE.Vector3();
+      child.getWorldPosition(worldPos);
+      
+      group.remove(child);
+      this._state.data.scene.add(child);
+      
+      child.position.copy(worldPos);
+    });
+    
+    this._state.data.scene.remove(group);
+    this._setSelection(children);
+    
+    this._state.emit('selection:ungrouped', { count: children.length });
+  },
+
+  /**
+   * Toggles sticky select mode (add to selection instead of replacing).
+   */
+  toggleStickySelect() {
+    this._stickySelect = !this._stickySelect;
+    this._state.emit('selection:sticky:toggled', { enabled: this._stickySelect });
+    return this._stickySelect;
+  },
+
+  /**
+   * Selects all objects with a specific material color.
+   */
+  selectByColor(hexColor) {
+    const color = new THREE.Color(hexColor);
+    const objects = this._getSelectableObjects();
+    const selectedObjects = [];
+    
+    objects.forEach(obj => {
+      if (obj.material) {
+        const materials = Array.isArray(obj.material) ? obj.material : [obj.material];
+        materials.forEach(mat => {
+          if (mat.color && mat.color.equals(color)) {
+            selectedObjects.push(obj);
+          }
+        });
+      }
+    });
+    
+    if (this._stickySelect) {
+      this._addToSelection(selectedObjects);
+    } else {
+      this._setSelection(selectedObjects);
+    }
+    
+    this._state.emit('selection:byColor', { color: hexColor, count: selectedObjects.length });
+    return selectedObjects;
+  },
+
+  /**
+   * Selects all objects of a specific type (mesh, light, camera, etc.).
+   */
+  selectByType(typeName) {
+    const objects = this._state.data.scene.children;
+    const selectedObjects = [];
+    
+    objects.forEach(obj => {
+      if (obj.type === typeName) {
+        selectedObjects.push(obj);
+      }
+    });
+    
+    if (this._stickySelect) {
+      this._addToSelection(selectedObjects);
+    } else {
+      this._setSelection(selectedObjects);
+    }
+    
+    this._state.emit('selection:byType', { type: typeName, count: selectedObjects.length });
+    return selectedObjects;
+  },
+
+  /**
+   * Selects all objects in the scene.
+   */
+  selectAll() {
+    const objects = this._getSelectableObjects();
+    this._setSelection(objects);
+    this._state.emit('selection:all', { count: objects.length });
+  },
+
+  /**
+   * Deselects all objects.
+   */
+  deselectAll() {
+    this._setSelection([]);
+    this._state.emit('selection:deselected');
+  },
+
+  /**
+   * Inverts the current selection.
+   */
+  invertSelection() {
+    const allObjects = this._getSelectableObjects();
+    const currentSelection = this._state.data.selectedObjects || [];
+    const newSelection = allObjects.filter(obj => !currentSelection.includes(obj));
+    
+    this._setSelection(newSelection);
+    this._state.emit('selection:inverted', { count: newSelection.length });
+  },
+
+  /**
+   * Selects objects within a bounding box.
+   */
+  selectByBoundingBox(min, max) {
+    const box = new THREE.Box3(min, max);
+    const objects = this._getSelectableObjects();
+    const selectedObjects = [];
+    
+    objects.forEach(obj => {
+      const objBox = new THREE.Box3().setFromObject(obj);
+      if (box.intersectsBox(objBox)) {
+        selectedObjects.push(obj);
+      }
+    });
+    
+    if (this._stickySelect) {
+      this._addToSelection(selectedObjects);
+    } else {
+      this._setSelection(selectedObjects);
+    }
+    
+    this._state.emit('selection:byBoundingBox', { count: selectedObjects.length });
+    return selectedObjects;
+  },
+
+  /**
+   * Selects objects by name pattern (regex).
+   */
+  selectByNamePattern(pattern) {
+    const regex = new RegExp(pattern, 'i');
+    const objects = this._getSelectableObjects();
+    const selectedObjects = [];
+    
+    objects.forEach(obj => {
+      if (obj.name && regex.test(obj.name)) {
+        selectedObjects.push(obj);
+      }
+    });
+    
+    if (this._stickySelect) {
+      this._addToSelection(selectedObjects);
+    } else {
+      this._setSelection(selectedObjects);
+    }
+    
+    this._state.emit('selection:byName', { pattern, count: selectedObjects.length });
+    return selectedObjects;
+  },
+
+  // ── Helper Methods ──
+
+  _getSelectableObjects() {
+    const objects = [];
+    this._state.data.scene.traverse((obj) => {
+      if (obj.isMesh && obj.userData.isManagedObject) {
+        objects.push(obj);
+      }
+    });
+    return objects;
+  },
+
+  _setSelection(objects) {
+    this._state.data.selectedObjects = objects;
+    this._state.set('selectedObjects', objects);
+    this._selectionHistory.push([...objects]);
+  },
+
+  _addToSelection(objects) {
+    const current = this._state.data.selectedObjects || [];
+    const newSelection = [...current];
+    
+    objects.forEach(obj => {
+      if (!newSelection.includes(obj)) {
+        newSelection.push(obj);
+      }
+    });
+    
+    this._setSelection(newSelection);
+  },
+
+  _getScreenPosition(object) {
+    const camera = this._state.data.camera;
+    const vector = new THREE.Vector3();
+    object.getWorldPosition(vector);
+    vector.project(camera);
+    
+    return {
+      x: (vector.x + 1) / 2 * window.innerWidth,
+      y: (-vector.y + 1) / 2 * window.innerHeight
+    };
+  },
+
+  _isPointInPolygon(point, polygon) {
+    let inside = false;
+    const x = point.x;
+    const y = point.y;
+    
+    for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+      const xi = polygon[i].x;
+      const yi = polygon[i].y;
+      const xj = polygon[j].x;
+      const yj = polygon[j].y;
+      
+      const intersect = ((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
+      
+      if (intersect) inside = !inside;
+    }
+    
+    return inside;
+  },
+
+  _updateLassoVisualization() {
+    if (!this._lassoLine || this._lassoPoints.length < 2) return;
+    
+    const points = this._lassoPoints.map(p => {
+      const vector = new THREE.Vector3(
+        (p.x / window.innerWidth) * 2 - 1,
+        -(p.y / window.innerHeight) * 2 + 1,
+        0.5
+      );
+      vector.unproject(this._state.data.camera);
+      return vector;
+    });
+    
+    // Close the lasso
+    points.push(points[0]);
+    
+    this._lassoLine.geometry.dispose();
+    this._lassoLine.geometry = new THREE.BufferGeometry().setFromPoints(points);
+  },
+
+  // ── Visual Nodes for Node Editor ──
+  nodes: {
+    'Selection/LassoSelectNode': (x, y) => {
+      const el = document.createElement('div');
+      el.className = 'shader-node';
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+      el.innerHTML = `
+        <div class="node-header">🎯 Lasso Select</div>
+        <div class="node-body">
+          <label>Sticky Mode:</label>
+          <input type="checkbox" class="node-input" data-prop="sticky" />
+          <button class="node-button" data-action="startLasso">Start Lasso</button>
+        </div>
+        <div class="node-outputs">
+          <span data-type="Selection">Selected Objects</span>
+        </div>
+      `;
+      return el;
+    },
+
+    'Selection/SelectByColorNode': (x, y) => {
+      const el = document.createElement('div');
+      el.className = 'shader-node';
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+      el.innerHTML = `
+        <div class="node-header">🎨 Select by Color</div>
+        <div class="node-body">
+          <label>Color:</label>
+          <input type="color" class="node-input" data-prop="color" value="#ff0000" />
+        </div>
+        <div class="node-outputs">
+          <span data-type="Selection">Selected Objects</span>
+        </div>
+      `;
+      return el;
+    },
+
+    'Selection/GroupNode': (x, y) => {
+      const el = document.createElement('div');
+      el.className = 'shader-node';
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+      el.innerHTML = `
+        <div class="node-header">📦 Group Objects</div>
+        <div class="node-inputs">
+          <span data-type="Selection">Objects to Group</span>
+        </div>
+        <div class="node-outputs">
+          <span data-type="Group">Grouped Object</span>
+        </div>
+      `;
+      return el;
+    }
+  }
+};
+```
+
+---
+
+## Integration into Master App
+
+Add these to your main initialization:
+
+```javascript
+// In MasterApp.js init() method
+import { GameMapPlugin } from './plugins/GameMapPlugin.js';
+import { SelectionPlugin } from './plugins/SelectionPlugin.js';
+
+// Register plugins
+this.plugins.register(GameMapPlugin);
+this.plugins.register(SelectionPlugin);
+```
+
+Both plugins are fully functional, ESLint-compliant, and integrate seamlessly with your existing architecture!

@@ -1,529 +1,361 @@
 <!DOCTYPE html>
-<html class="dark" lang="en">
+<html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>MEME STUDIO | Brutalist Editor</title>
-
-  <!-- Tailwind (CDN prototype — kept self-contained for swaps) -->
-  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Master Studio | Brutalist Editor</title>
 
   <!-- Brutalist typography -->
   <link href="https://fonts.googleapis.com/css2?family=Anybody:wght@700;800;900&family=Plus+Jakarta+Sans:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 
+  <!-- Shared brutalist skin -->
+  <link rel="stylesheet" href="/core/brutalist.css" />
+
   <style>
-    /* Material Symbols default weight/grade */
-    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
-
-    /* Brutalist accent helpers (overridden by Tailwind classes where used) */
-    .neon-glow { text-shadow: 0 0 10px rgba(0, 255, 0, 0.7); }
-    .hard-shadow { box-shadow: 4px 4px 0px 0px #02e600; }
-    .hard-shadow-active { box-shadow: 0px 0px 0px 0px #02e600; transform: translate(2px, 2px); }
-
-    /* Native scrollbars in brutalist style */
-    ::-webkit-scrollbar { width: 4px; height: 4px; }
-    ::-webkit-scrollbar-track { background: #131313; }
-    ::-webkit-scrollbar-thumb { background: #3b4b35; }
-    ::-webkit-scrollbar-thumb:hover { background: #02e600; }
-
-    /* Animated neon grid for the viewport */
-    @keyframes grid-pulse {
-      0% { opacity: 0.3; }
-      50% { opacity: 0.6; }
-      100% { opacity: 0.3; }
-    }
-    .grid-animate { animation: grid-pulse 4s infinite ease-in-out; }
-
-    /* Three.js canvas fills the viewport section */
-    #renderCanvas {
-      display: block;
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      border: none;
-    }
-
-    /* Properties panel live values — highlight on update */
-    .prop-input.is-changed {
-      background: var(--primary-fixed-dim, #02e600);
-      color: #013a00;
-      transition: background 0.18s ease;
-    }
-
-    /* Modal entry animation */
-    #primitive-menu.show > div {
-      animation: primitive-enter 0.18s cubic-bezier(.2,.9,.3,1.1);
-    }
-    @keyframes primitive-enter {
-      from { transform: scale(0.92); opacity: 0; }
-      to   { transform: scale(1);    opacity: 1; }
-    }
-
-    /* Cell hover for primitive grid (slightly heavier than Tailwind baked-in) */
-    .prim-cell:hover { box-shadow: 4px 4px 0 0 #02e600; transform: translate(-1px, -1px); }
+    /* Per-page primitive grid cell hover (heavier shadow than baked-in) */
     .prim-cell { transition: box-shadow 0.1s, transform 0.1s, border-color 0.1s; }
-  </style>
-
-  <script id="tailwind-config">
-    tailwind.config = {
-      darkMode: "class",
-      theme: {
-        extend: {
-          "colors": {
-                  "surface": "#131313",
-                  "secondary-fixed-dim": "#e9c400",
-                  "on-primary-container": "#027100",
-                  "on-primary": "#013a00",
-                  "tertiary": "#fff7f5",
-                  "tertiary-fixed": "#ffdbd1",
-                  "on-primary-fixed": "#002200",
-                  "primary": "#eaffde",
-                  "error-container": "#93000a",
-                  "primary-container": "#00ff00",
-                  "error": "#ffb4ab",
-                  "on-tertiary-fixed": "#3b0900",
-                  "on-secondary-fixed-variant": "#544600",
-                  "on-surface": "#e5e2e1",
-                  "surface-container": "#201f1f",
-                  "tertiary-container": "#ffd2c6",
-                  "surface-bright": "#3a3939",
-                  "on-error-container": "#ffdad6",
-                  "surface-dim": "#131313",
-                  "primary-fixed-dim": "#02e600",
-                  "secondary-container": "#ffdb3c",
-                  "on-primary-fixed-variant": "#015300",
-                  "inverse-primary": "#026e00",
-                  "surface-tint": "#02e600",
-                  "inverse-surface": "#e5e2e1",
-                  "surface-variant": "#353534",
-                  "on-tertiary": "#601400",
-                  "inverse-on-surface": "#313030",
-                  "secondary-fixed": "#ffe16d",
-                  "surface-container-high": "#2a2a2a",
-                  "on-error": "#690005",
-                  "outline": "#84967c",
-                  "surface-container-lowest": "#0e0e0e",
-                  "on-background": "#e5e2e1",
-                  "surface-container-low": "#1c1b1b",
-                  "on-tertiary-fixed-variant": "#872000",
-                  "on-surface-variant": "#b9ccaf",
-                  "on-secondary-fixed": "#221b00",
-                  "background": "#131313",
-                  "primary-fixed": "#77ff61",
-                  "surface-container-highest": "#353534",
-                  "secondary": "#fff9ef",
-                  "outline-variant": "#3b4b35",
-                  "on-secondary-container": "#725f00",
-                  "on-secondary": "#3a3000",
-                  "tertiary-fixed-dim": "#ffb5a0",
-                  "on-tertiary-container": "#b42e00"
-          },
-          "borderRadius": {
-                  "DEFAULT": "0.25rem",
-                  "lg": "0.5rem",
-                  "xl": "0.75rem",
-                  "full": "9999px"
-          },
-          "spacing": {
-                  "margin-mobile": "16px",
-                  "gutter": "16px",
-                  "unit": "4px",
-                  "margin-desktop": "32px",
-                  "container-max": "1280px"
-          },
-          "fontFamily": {
-                  "body-md": ["Plus Jakarta Sans"],
-                  "headline-xl": ["Anybody"],
-                  "headline-md": ["Anybody"],
-                  "headline-lg": ["Anybody"],
-                  "label-mono": ["Space Grotesk"],
-                  "label-bold": ["Space Grotesk"]
-          },
-          "fontSize": {
-                  "body-md": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}],
-                  "headline-xl": ["64px", {"lineHeight": "1.1", "letterSpacing": "-0.04em", "fontWeight": "900"}],
-                  "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "700"}],
-                  "headline-lg": ["40px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "800"}],
-                  "label-mono": ["12px", {"lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "500"}],
-                  "label-bold": ["14px", {"lineHeight": "1", "fontWeight": "700"}]
-          }
-        },
-      },
+    .prim-cell:hover {
+      box-shadow: 4px 4px 0 0 var(--primary-neon);
+      transform: translate(-1px, -1px);
+      border-color: var(--primary-neon);
+      background: var(--surface-container-high);
     }
-  </script>
+    .prim-cell:hover .material-symbols-outlined { color: var(--primary-neon); text-shadow: 0 0 10px color-mix(in srgb, var(--primary-neon) 70%, transparent); }
+    .prim-cell.is-featured {
+      background: var(--secondary-neon); color: var(--border);
+      border-color: var(--primary-neon); box-shadow: 4px 4px 0 0 var(--border);
+    }
+    .prim-cell:hover .prim-icon { color: var(--primary-neon); }
+
+    /* GFX resource type-color badges */
+    .gfx-type-badge { display: inline-block; padding: 1px 4px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; border: 1px solid; }
+    .gfx-type-water-cubemap     { background: rgba(68,170,255,0.15);  color: #44aaff; border-color: #44aaff; }
+    .gfx-type-shadow-map        { background: rgba(179,136,255,0.15); color: #b388ff; border-color: #b388ff; }
+    .gfx-type-hdri-envmap       { background: rgba(255,149,0,0.15);   color: #ff9500; border-color: #ff9500; }
+    .gfx-type-pointcloud-geometry { background: rgba(0,229,255,0.15); color: #00e5ff; border-color: #00e5ff; }
+    .gfx-type-cad-geometry      { background: rgba(118,255,3,0.15);  color: #76ff03; border-color: #76ff03; }
+    .gfx-type-unknown           { background: rgba(185,204,175,0.15); color: var(--on-surface-variant); border-color: var(--outline-variant); }
+  </style>
 </head>
-<body class="bg-surface text-on-surface selection:bg-primary-container selection:text-on-primary overflow-hidden h-screen flex flex-col">
+<body class="bs-body-shell">
 
-  <!-- TOP NAV (brutalist header — replaces MenuSystemPlugin menu bar in this layout) -->
-  <nav class="fixed top-0 w-full z-50 flex justify-between items-center px-margin-desktop h-16 bg-surface dark:bg-surface border-b-2 border-outline-variant dark:border-outline-variant shadow-[4px_4px_0px_0px_#02e600]">
-    <div class="flex items-center gap-8">
-      <a class="font-headline-md text-headline-md text-primary-fixed dark:text-primary-fixed uppercase tracking-tighter italic" href="/index.html">MEME STUDIO</a>
-      <div class="hidden md:flex gap-6 items-center">
-        <a class="text-on-surface-variant font-medium font-label-bold text-label-bold hover:text-primary-fixed hover:bg-surface-container-highest transition-all duration-100" href="/index.html">Node Editor</a>
-        <a class="text-primary-fixed font-bold border-b-2 border-primary-fixed font-label-bold text-label-bold py-5" href="#">Brutalist</a>
-        <a class="text-on-surface-variant font-medium font-label-bold text-label-bold hover:text-primary-fixed hover:bg-surface-container-highest transition-all duration-100" href="#">Assets</a>
-        <a class="text-on-surface-variant font-medium font-label-bold text-label-bold hover:text-primary-fixed hover:bg-surface-container-highest transition-all duration-100" href="#">Market</a>
-        <a class="text-on-surface-variant font-medium font-label-bold text-label-bold hover:text-primary-fixed hover:bg-surface-container-highest transition-all duration-100" href="#">Learn</a>
-      </div>
-    </div>
-    <div class="flex items-center gap-4">
-      <div class="relative group">
-        <div class="absolute inset-y-0 left-3 flex items-center pointer-events-none text-outline">
-          <span class="material-symbols-outlined text-sm">search</span>
+  <!-- ── ADD PRIMITIVE MODAL (opened by SHIFT+A) ───────────────────────────── -->
+  <div class="bs-modal" id="primitive-menu" hidden>
+    <div class="bs-modal__panel bs-modal__panel--wide">
+
+      <div class="bs-modal__header">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <span class="material-symbols-outlined bs-neon" style="font-size: 24px;">category</span>
+          <div class="bs-modal__title">ADD PRIMITIVE</div>
         </div>
-        <input class="bg-surface-container-lowest border-2 border-outline-variant focus:border-primary-fixed-dim text-primary-fixed font-label-mono text-label-mono py-2 pl-10 pr-4 outline-none transition-all w-64" placeholder="SEARCH ASSETS..." type="text"/>
+        <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; color: var(--on-surface-variant); background: var(--surface-container-highest); padding: 4px 8px; border: 1px solid var(--outline-variant);">SHIFT+A</div>
       </div>
-      <button id="btn-render" class="bg-surface border-2 border-primary-fixed-dim text-primary-fixed px-4 py-2 font-label-bold text-label-bold shadow-[3px_3px_0px_0px_#02e600] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">RENDER</button>
-      <button class="bg-primary-container border-2 border-on-primary-container text-on-primary font-label-bold text-label-bold px-4 py-2 shadow-[4px_4px_0px_0px_#000000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">MINT NFT</button>
+
+      <div style="padding: 24px;">
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
+          <button class="prim-cell" data-primitive="cube" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 16px; background: var(--surface-lowest); border: 2px solid var(--outline-variant); cursor: pointer; color: var(--on-surface);">
+            <span class="material-symbols-outlined bs-neon" style="font-size: 32px;">deployed_code</span>
+            <span style="font-family: 'Space Grotesk', monospace; font-size: 10px; text-transform: uppercase; color: var(--on-surface-variant);">Cube</span>
+          </button>
+          <button class="prim-cell" data-primitive="sphere" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 16px; background: var(--surface-lowest); border: 2px solid var(--outline-variant); cursor: pointer; color: var(--on-surface);">
+            <span class="material-symbols-outlined bs-neon" style="font-size: 32px;">radio_button_unchecked</span>
+            <span style="font-family: 'Space Grotesk', monospace; font-size: 10px; text-transform: uppercase; color: var(--on-surface-variant);">Sphere</span>
+          </button>
+          <button class="prim-cell" data-primitive="cone" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 16px; background: var(--surface-lowest); border: 2px solid var(--outline-variant); cursor: pointer; color: var(--on-surface);">
+            <span class="material-symbols-outlined bs-neon" style="font-size: 32px;">change_history</span>
+            <span style="font-family: 'Space Grotesk', monospace; font-size: 10px; text-transform: uppercase; color: var(--on-surface-variant);">Cone</span>
+          </button>
+          <button class="prim-cell" data-primitive="torus" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 16px; background: var(--surface-lowest); border: 2px solid var(--outline-variant); cursor: pointer; color: var(--on-surface);">
+            <span class="material-symbols-outlined bs-neon" style="font-size: 32px;">vibration</span>
+            <span style="font-family: 'Space Grotesk', monospace; font-size: 10px; text-transform: uppercase; color: var(--on-surface-variant);">Torus</span>
+          </button>
+          <button class="prim-cell" data-primitive="capsule" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 16px; background: var(--surface-lowest); border: 2px solid var(--outline-variant); cursor: pointer; color: var(--on-surface);">
+            <span class="material-symbols-outlined bs-neon" style="font-size: 32px;">capsule</span>
+            <span style="font-family: 'Space Grotesk', monospace; font-size: 10px; text-transform: uppercase; color: var(--on-surface-variant);">Capsule</span>
+          </button>
+          <button class="prim-cell" data-primitive="cylinder" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 16px; background: var(--surface-lowest); border: 2px solid var(--outline-variant); cursor: pointer; color: var(--on-surface);">
+            <span class="material-symbols-outlined bs-neon" style="font-size: 32px;">stat_0</span>
+            <span style="font-family: 'Space Grotesk', monospace; font-size: 10px; text-transform: uppercase; color: var(--on-surface-variant);">Cylinder</span>
+          </button>
+          <button class="prim-cell" data-primitive="pyramid" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 16px; background: var(--surface-lowest); border: 2px solid var(--outline-variant); cursor: pointer; color: var(--on-surface);">
+            <span class="material-symbols-outlined bs-neon" style="font-size: 32px;">signal_cellular_0_bar</span>
+            <span style="font-family: 'Space Grotesk', monospace; font-size: 10px; text-transform: uppercase; color: var(--on-surface-variant);">Pyramid</span>
+          </button>
+          <button class="prim-cell is-featured" data-primitive="text3d" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 16px; cursor: pointer;">
+            <span class="material-symbols-outlined" style="font-size: 32px; font-variation-settings: 'FILL' 1;">text_fields</span>
+            <span style="font-family: 'Space Grotesk', monospace; font-size: 10px; font-weight: 700; text-transform: uppercase;">Text 3D</span>
+          </button>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; font-family: 'Space Grotesk', monospace; font-size: 10px; color: var(--on-surface-variant); margin-top: 32px; text-transform: uppercase;">
+          <span>8 PRIMITIVES AVAILABLE</span>
+          <button id="cancel-primitive" class="bs-aside-link" style="text-decoration: underline; cursor: pointer; background: transparent; border: none; padding: 0;">Cancel [Esc]</button>
+        </div>
+      </div>
     </div>
-  </nav>
+  </div>
 
-  <main class="flex flex-1 pt-16 overflow-hidden relative">
+  <!-- ── Main app shell ───────────────────────────────────────────────────── -->
+  <main class="bs-page">
 
-    <!-- LEFT SIDEBAR (Outliner + ADD NODE) -->
-    <aside class="fixed left-0 top-16 h-[calc(100vh-64px-32px)] w-64 bg-surface-container-lowest dark:bg-surface-container-lowest border-r-2 border-outline-variant dark:border-outline-variant flex flex-col p-4 z-40">
-      <div class="mb-6">
-        <div class="font-label-bold text-label-bold text-secondary-fixed mb-1 uppercase">ALPHA BUILD</div>
-        <div class="font-label-mono text-label-mono text-on-surface-variant opacity-60">v4.2.0-LFG</div>
-      </div>
+    <!-- LEFT SIDEBAR (dynamic outliner + ADD NODE button) -->
+    <aside class="bs-aside bs-aside--left">
+      <div class="bs-aside-tag">ALPHA BUILD</div>
+      <div class="bs-aside-version">v4.2.0-LFG</div>
 
-      <div class="flex flex-col gap-1 mb-8 overflow-y-auto flex-1" id="outliner-list">
-        <div class="text-primary-fixed font-label-bold text-label-bold uppercase tracking-widest mb-2 flex items-center justify-between">
+      <div class="bs-aside-section" id="outliner-list">
+        <div class="bs-aside-section-title">
           OUTLINER
-          <span class="material-symbols-outlined text-sm">filter_list</span>
+          <span class="material-symbols-outlined" style="font-size: 14px;">filter_list</span>
         </div>
-        <!-- Outliner items populated dynamically -->
+        <!-- Outliner rows are populated dynamically by refreshOutliner() below -->
       </div>
 
-      <div class="mt-auto pt-4 border-t-2 border-outline-variant space-y-4">
-        <button class="w-full bg-secondary-container text-on-secondary-container border-2 border-black font-label-bold text-label-bold py-3 shadow-[3px_3px_0px_0px_#000] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all flex items-center justify-center gap-2" id="add-node-btn">
+      <div class="bs-aside-cta" style="display: flex; flex-direction: column; gap: 16px;">
+        <button id="add-node-btn" class="bs-cta-primary">
           <span class="material-symbols-outlined">add_box</span>
           ADD NODE
         </button>
-        <div class="flex flex-col gap-2">
-          <a class="flex items-center gap-2 font-label-mono text-label-mono text-on-surface-variant hover:text-primary-fixed transition-colors" href="#"><span class="material-symbols-outlined text-sm">help</span>Docs</a>
-          <a class="flex items-center gap-2 font-label-mono text-label-mono text-on-surface-variant hover:text-primary-fixed transition-colors" href="#"><span class="material-symbols-outlined text-sm">forum</span>Support</a>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <a class="bs-aside-link" href="#"><span class="material-symbols-outlined" style="font-size: 14px;">help</span>Docs</a>
+          <a class="bs-aside-link" href="#"><span class="material-symbols-outlined" style="font-size: 14px;">forum</span>Support</a>
         </div>
       </div>
     </aside>
 
-    <!-- ADD PRIMITIVE MODAL (SHIFT+A) -->
-    <div class="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm hidden items-center justify-center pointer-events-auto" id="primitive-menu">
-      <div class="bg-surface-container-lowest border-4 border-primary-fixed-dim w-[480px] p-6 shadow-[16px_16px_0px_0px_rgba(0,0,0,1)] relative">
-        <div class="flex items-center justify-between mb-6 border-b-2 border-outline-variant pb-4">
-          <div class="flex items-center gap-3">
-            <span class="material-symbols-outlined text-primary-fixed text-headline-md">category</span>
-            <h2 class="font-headline-md text-headline-md text-primary-fixed uppercase italic tracking-tighter">ADD PRIMITIVE</h2>
-          </div>
-          <div class="font-label-mono text-[10px] text-on-surface-variant bg-surface-variant px-2 py-1 border border-outline-variant">SHIFT+A</div>
-        </div>
-        <div class="grid grid-cols-4 gap-4" id="primitive-grid">
-          <button class="prim-cell flex flex-col items-center justify-center gap-2 p-4 bg-surface border-2 border-outline-variant hover:border-primary-fixed-dim hover:bg-surface-container-high transition-all group" data-primitive="cube">
-            <span class="material-symbols-outlined text-3xl text-primary-fixed group-hover:neon-glow">deployed_code</span>
-            <span class="font-label-mono text-[10px] uppercase text-on-surface-variant group-hover:text-primary-fixed">Cube</span>
-          </button>
-          <button class="prim-cell flex flex-col items-center justify-center gap-2 p-4 bg-surface border-2 border-outline-variant hover:border-primary-fixed-dim hover:bg-surface-container-high transition-all group" data-primitive="sphere">
-            <span class="material-symbols-outlined text-3xl text-primary-fixed group-hover:neon-glow">radio_button_unchecked</span>
-            <span class="font-label-mono text-[10px] uppercase text-on-surface-variant group-hover:text-primary-fixed">Sphere</span>
-          </button>
-          <button class="prim-cell flex flex-col items-center justify-center gap-2 p-4 bg-surface border-2 border-outline-variant hover:border-primary-fixed-dim hover:bg-surface-container-high transition-all group" data-primitive="cone">
-            <span class="material-symbols-outlined text-3xl text-primary-fixed group-hover:neon-glow">change_history</span>
-            <span class="font-label-mono text-[10px] uppercase text-on-surface-variant group-hover:text-primary-fixed">Cone</span>
-          </button>
-          <button class="prim-cell flex flex-col items-center justify-center gap-2 p-4 bg-surface border-2 border-outline-variant hover:border-primary-fixed-dim hover:bg-surface-container-high transition-all group" data-primitive="torus">
-            <span class="material-symbols-outlined text-3xl text-primary-fixed group-hover:neon-glow">vibration</span>
-            <span class="font-label-mono text-[10px] uppercase text-on-surface-variant group-hover:text-primary-fixed">Torus</span>
-          </button>
-          <button class="prim-cell flex flex-col items-center justify-center gap-2 p-4 bg-surface border-2 border-outline-variant hover:border-primary-fixed-dim hover:bg-surface-container-high transition-all group" data-primitive="capsule">
-            <span class="material-symbols-outlined text-3xl text-primary-fixed group-hover:neon-glow">capsule</span>
-            <span class="font-label-mono text-[10px] uppercase text-on-surface-variant group-hover:text-primary-fixed">Capsule</span>
-          </button>
-          <button class="prim-cell flex flex-col items-center justify-center gap-2 p-4 bg-surface border-2 border-outline-variant hover:border-primary-fixed-dim hover:bg-surface-container-high transition-all group" data-primitive="cylinder">
-            <span class="material-symbols-outlined text-3xl text-primary-fixed group-hover:neon-glow">stat_0</span>
-            <span class="font-label-mono text-[10px] uppercase text-on-surface-variant group-hover:text-primary-fixed">Cylinder</span>
-          </button>
-          <button class="prim-cell flex flex-col items-center justify-center gap-2 p-4 bg-surface border-2 border-outline-variant hover:border-primary-fixed-dim hover:bg-surface-container-high transition-all group" data-primitive="pyramid">
-            <span class="material-symbols-outlined text-3xl text-primary-fixed group-hover:neon-glow">signal_cellular_0_bar</span>
-            <span class="font-label-mono text-[10px] uppercase text-on-surface-variant group-hover:text-primary-fixed">Pyramid</span>
-          </button>
-          <button class="prim-cell flex flex-col items-center justify-center gap-2 p-4 bg-primary-container border-2 border-primary-fixed-dim shadow-[4px_4px_0px_0px_#000] scale-105 transition-all group" data-primitive="text3d">
-            <span class="material-symbols-outlined text-3xl text-on-primary-container fill-[1] group-hover:neon-glow">text_fields</span>
-            <span class="font-label-bold text-[10px] uppercase text-on-primary-container">Text 3D</span>
-          </button>
-        </div>
-        <div class="mt-8 flex justify-between items-center text-on-surface-variant font-label-mono text-[10px]">
-          <span>8 PRIMITIVES AVAILABLE</span>
-          <button class="hover:text-primary-fixed transition-colors underline uppercase" id="cancel-primitive">Cancel [Esc]</button>
-        </div>
-      </div>
-    </div>
+    <!-- VIEWPORT -->
+    <section class="bs-viewport" id="viewport">
+      <div class="bs-radial-bg"></div>
+      <div class="bs-grid-bg"></div>
+      <div class="bs-viewport-label">VIEWPORT: PERSPECTIVE</div>
 
-    <!-- VIEWPORT (Three.js canvas) -->
-    <section class="flex-1 ml-64 mr-80 relative bg-surface overflow-hidden" id="viewport">
-      <!-- Radial neon gradient -->
-      <div class="absolute inset-0 z-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#1a2e1a] to-surface"></div>
-      <!-- Animated perspective grid -->
-      <div class="absolute inset-0 z-0 pointer-events-none grid-animate" style="background-image: linear-gradient(to right, #00ff001a 1px, transparent 1px), linear-gradient(to bottom, #00ff001a 1px, transparent 1px); background-size: 40px 40px; transform: perspective(1000px) rotateX(60deg) translateY(-200px) scale(2);"></div>
-
-      <!-- Floating viewport label -->
-      <div class="absolute top-4 left-4 z-10 px-4 py-2 bg-surface-container-highest/80 border-2 border-primary-fixed-dim text-primary-fixed font-label-mono text-label-mono backdrop-blur-md">
-        VIEWPORT: PERSPECTIVE
-      </div>
-
-      <!-- Three.js render canvas -->
       <canvas id="renderCanvas"></canvas>
-      <canvas id="lassoOverlay" style="position:absolute;top:0;left:0;width:100%;height:100%;display:none;pointer-events:none;z-index:10;"></canvas>
+      <canvas id="lassoOverlay"></canvas>
 
-      <!-- Drop zone (file drop target) -->
-      <div id="drop-zone">
-        <div id="drop-zone-text">Drop point cloud or CAD file here</div>
-      </div>
+      <div id="drop-zone"><div id="drop-zone-text">Drop point cloud or CAD file here</div></div>
 
-      <!-- Bottom gizmo toolbar -->
-      <div class="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center bg-surface-container-highest border-2 border-outline-variant p-2 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] z-20" id="bottom-toolbar">
-        <button class="gizmo-btn p-3 hover:bg-primary-container hover:text-on-primary-container transition-colors border-r-2 border-outline-variant group relative" data-gizmo-mode="pan">
-          <span class="material-symbols-outlined text-headline-md">pan_tool</span>
-          <div class="absolute -top-10 left-1/2 -translate-x-1/2 bg-surface border border-primary-fixed-dim px-2 py-1 text-[10px] opacity-0 group-hover:opacity-100 font-label-mono whitespace-nowrap pointer-events-none">PAN [P]</div>
-        </button>
-        <button class="gizmo-btn p-3 bg-primary-container text-on-primary-container border-r-2 border-outline-variant" data-gizmo-mode="move">
-          <span class="material-symbols-outlined text-headline-md" style="font-variation-settings: 'FILL' 1;">open_with</span>
-        </button>
-        <button class="gizmo-btn p-3 hover:bg-primary-container hover:text-on-primary-container transition-colors border-r-2 border-outline-variant" data-gizmo-mode="rotate">
-          <span class="material-symbols-outlined text-headline-md">sync</span>
-        </button>
-        <button class="gizmo-btn p-3 hover:bg-primary-container hover:text-on-primary-container transition-colors" data-gizmo-mode="scale">
-          <span class="material-symbols-outlined text-headline-md">aspect_ratio</span>
-        </button>
-      </div>
-
-      <!-- Controls hint -->
-      <div id="controls-hint" class="absolute bottom-1 left-1 z-30 text-[10px] text-outline-variant font-label-mono pointer-events-none select-none bg-surface-container-lowest/70 px-2 py-1 border border-outline-variant">
+      <div id="controls-hint" class="bs-controls-hint">
         <b>G</b> Move &nbsp; <b>R</b> Rotate &nbsp; <b>S</b> Scale &nbsp; <b>L</b> Lasso &nbsp; <b>T</b> Sticky &nbsp; <b>P</b> Debug &nbsp; <b>SHIFT+A</b> Add
+      </div>
+
+      <div class="bs-gizmo-toolbar" id="bottom-toolbar">
+        <button class="bs-gizmo-btn" data-gizmo-mode="pan"    data-tip="PAN [P]"><span class="material-symbols-outlined">pan_tool</span></button>
+        <button class="bs-gizmo-btn is-active" data-gizmo-mode="move"  data-tip="MOVE [G]"><span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">open_with</span></button>
+        <button class="bs-gizmo-btn" data-gizmo-mode="rotate" data-tip="ROTATE [R]"><span class="material-symbols-outlined">sync</span></button>
+        <button class="bs-gizmo-btn" data-gizmo-mode="scale"  data-tip="SCALE [S]"><span class="material-symbols-outlined">aspect_ratio</span></button>
       </div>
     </section>
 
     <!-- RIGHT SIDEBAR (Properties) -->
-    <aside class="fixed right-0 top-16 h-[calc(100vh-64px-32px)] w-80 bg-surface-container-lowest dark:bg-surface-container-lowest border-l-2 border-outline-variant dark:border-outline-variant flex flex-col p-6 z-40 overflow-y-auto">
-      <div class="mb-8">
-        <div class="text-primary-fixed font-headline-md text-headline-md tracking-tighter uppercase mb-4 flex items-center gap-2">
-          <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">settings</span>
-          PROPERTIES
+    <aside class="bs-aside bs-aside--right">
+      <div class="bs-h2" style="display: flex; align-items: center; gap: 8px; margin-bottom: 32px;">
+        <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">settings</span>
+        PROPERTIES
+      </div>
+
+      <!-- Water debug overlay (populated by WaterDebugOverlay plugin) -->
+      <div id="water-debug-container" style="margin-bottom: 24px; background: var(--surface-container-high); border: 2px solid var(--primary-neon); padding: 12px; display: none;">
+        <div style="display: flex; align-items: center; justify-content: space-between; font-family: 'Space Grotesk', monospace; font-size: 11px; font-weight: 700; color: var(--on-surface-variant); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--outline-variant); padding-bottom: 4px; margin-bottom: 8px;">
+          <span style="display: flex; align-items: center; gap: 4px;">
+            <span class="material-symbols-outlined" style="font-size: 14px;">water</span>
+            WATER REFLECTION
+          </span>
+          <span class="material-symbols-outlined" style="font-size: 14px;">360</span>
         </div>
-
-        <!-- Transform section -->
-        <div class="space-y-4">
-          <div class="flex items-center justify-between font-label-bold text-label-bold text-on-surface-variant uppercase border-b border-outline-variant pb-2">
-            <span>Transform</span>
-            <span class="material-symbols-outlined text-sm">expand_more</span>
-          </div>
-
-          <div class="space-y-3">
-            <div class="grid grid-cols-[1fr_2fr] items-center">
-              <span class="font-label-mono text-label-mono text-on-surface-variant">LOCATION</span>
-              <div class="flex gap-2">
-                <input class="prop-input w-full bg-surface border border-outline-variant font-label-mono text-label-mono p-1 text-center text-primary-fixed" type="text" data-prop="loc-x" value="0.00"/>
-                <input class="prop-input w-full bg-surface border border-outline-variant font-label-mono text-label-mono p-1 text-center text-primary-fixed" type="text" data-prop="loc-y" value="0.00"/>
-                <input class="prop-input w-full bg-surface border border-outline-variant font-label-mono text-label-mono p-1 text-center text-primary-fixed" type="text" data-prop="loc-z" value="0.00"/>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-[1fr_2fr] items-center">
-              <span class="font-label-mono text-label-mono text-on-surface-variant">ROTATION</span>
-              <div class="flex gap-2">
-                <input class="prop-input w-full bg-surface border border-outline-variant font-label-mono text-label-mono p-1 text-center text-primary-fixed" type="text" data-prop="rot-x" value="0°"/>
-                <input class="prop-input w-full bg-surface border border-outline-variant font-label-mono text-label-mono p-1 text-center text-primary-fixed" type="text" data-prop="rot-y" value="0°"/>
-                <input class="prop-input w-full bg-surface border border-outline-variant font-label-mono text-label-mono p-1 text-center text-primary-fixed" type="text" data-prop="rot-z" value="0°"/>
-              </div>
-            </div>
-
-            <div class="grid grid-cols-[1fr_2fr] items-center">
-              <span class="font-label-mono text-label-mono text-on-surface-variant">SCALE</span>
-              <div class="flex gap-2">
-                <input class="prop-input w-full bg-surface border border-outline-variant font-label-mono text-label-mono p-1 text-center text-primary-fixed" type="text" data-prop="scale-x" value="1.00"/>
-                <input class="prop-input w-full bg-surface border border-outline-variant font-label-mono text-label-mono p-1 text-center text-primary-fixed" type="text" data-prop="scale-y" value="1.00"/>
-                <input class="prop-input w-full bg-surface border border-outline-variant font-label-mono text-label-mono p-1 text-center text-primary-fixed" type="text" data-prop="scale-z" value="1.00"/>
-              </div>
-            </div>
-          </div>
+        <div style="display: flex; justify-content: center;">
+          <canvas id="water-debug-canvas" width="200" height="200" style="width:200px;height:200px;background:#000;border:1px solid var(--primary-neon);image-rendering:pixelated;"></canvas>
         </div>
+        <div class="water-debug-label" style="font-family: 'Space Grotesk', monospace; font-size: 10px; color: var(--on-surface-variant); opacity: 0.7; text-align: center; margin-top: 8px;">—</div>
+      </div>
 
-        <!-- Materials section -->
-        <div class="mt-10 space-y-4">
-          <div class="flex items-center justify-between font-label-bold text-label-bold text-on-surface-variant uppercase border-b border-outline-variant pb-2">
-            <span>Materials</span>
-            <button class="bg-primary-container text-on-primary-container px-2 py-0.5 text-[10px] border border-black">NEW</button>
-          </div>
-          <div class="p-4 bg-surface-container-high border-2 border-outline-variant flex flex-col gap-4">
-            <div class="aspect-square w-full bg-surface border border-primary-fixed overflow-hidden relative group">
-              <div class="w-full h-full bg-gradient-to-br from-primary-fixed-dim to-on-primary-fixed animate-pulse"></div>
-              <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/60">
-                <span class="font-label-mono text-[10px] text-primary-fixed">EDIT_MATERIAL</span>
-              </div>
-            </div>
-            <div class="space-y-2">
-              <label class="font-label-mono text-label-mono text-on-surface-variant block">SHADERS: TOON_SKETCH_PRO</label>
-              <input class="w-full accent-primary-fixed bg-surface h-1 appearance-none" type="range" min="0" max="100" value="69"/>
-              <div class="flex justify-between font-label-mono text-[10px]">
-                <span>ROUGHNESS</span>
-                <span class="text-primary-fixed" id="roughness-readout">0.69</span>
-              </div>
-            </div>
+      <div id="gfx-resource-panel-container" style="background: var(--surface-lowest); border: 2px solid var(--outline-variant); font-family: 'Space Grotesk', monospace; font-size: 10px; margin-bottom: 24px;">
+        <div style="background: var(--surface-container); border-bottom: 2px solid var(--outline-variant); padding: 6px 10px; display: flex; align-items: center; gap: 8px; color: var(--secondary-neon); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em;">
+          <span class="material-symbols-outlined" style="color: var(--primary-neon); font-size: 16px;">memory</span>
+          <span>GFX RESOURCES</span>
+          <span style="margin-left: auto; background: var(--primary-neon); color: var(--border); padding: 1px 6px; font-weight: 700; min-width: 20px; text-align: center;" id="gfx-count">0</span>
+        </div>
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr>
+              <th style="background: var(--surface-container); color: var(--on-surface-variant); text-align: left; padding: 4px 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--outline-variant);">ID</th>
+              <th style="background: var(--surface-container); color: var(--on-surface-variant); text-align: left; padding: 4px 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--outline-variant);">TYPE</th>
+              <th style="background: var(--surface-container); color: var(--on-surface-variant); text-align: right; padding: 4px 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--outline-variant);">BYTES</th>
+              <th style="background: var(--surface-container); color: var(--on-surface-variant); text-align: left; padding: 4px 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--outline-variant);">LABEL</th>
+            </tr>
+          </thead>
+          <tbody id="gfx-tbody">
+            <tr><td colspan="4" style="padding: 12px; color: var(--on-surface-variant); opacity: 0.6; text-align: center;">No GFX resources tracked</td></tr>
+          </tbody>
+        </table>
+        <div style="background: var(--surface-container); border-top: 1px solid var(--outline-variant); padding: 4px 10px; color: var(--on-surface-variant); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;">TOTAL: <span id="gfx-total" style="color: var(--primary-neon); font-weight: 700;">0 B</span></div>
+      </div>
+
+      <div class="bs-section">
+        <div class="bs-section-header">
+          <span>Transform</span>
+          <span class="material-symbols-outlined" style="font-size: 14px;">expand_more</span>
+        </div>
+        <div class="bs-prop-row">
+          <span class="bs-prop-label">LOCATION</span>
+          <div style="display: flex; gap: 8px;">
+            <input class="bs-prop-input" type="text" data-prop="loc-x" value="0.00"/>
+            <input class="bs-prop-input" type="text" data-prop="loc-y" value="0.00"/>
+            <input class="bs-prop-input" type="text" data-prop="loc-z" value="0.00"/>
           </div>
         </div>
-
-        <!-- Physics section -->
-        <div class="mt-10 space-y-4">
-          <div class="flex items-center justify-between font-label-bold text-label-bold text-on-surface-variant uppercase border-b border-outline-variant pb-2">
-            <span>Physics</span>
-            <span class="material-symbols-outlined text-sm">settings_input_component</span>
+        <div class="bs-prop-row">
+          <span class="bs-prop-label">ROTATION</span>
+          <div style="display: flex; gap: 8px;">
+            <input class="bs-prop-input" type="text" data-prop="rot-x" value="0°"/>
+            <input class="bs-prop-input" type="text" data-prop="rot-y" value="0°"/>
+            <input class="bs-prop-input" type="text" data-prop="rot-z" value="0°"/>
           </div>
-          <button class="w-full flex items-center gap-2 p-3 bg-surface border-2 border-primary-fixed/30 hover:border-primary-fixed transition-colors text-left" id="rib-physics-toggle">
-            <div class="w-4 h-4 bg-primary-fixed shadow-[0_0_5px_#02e600]"></div>
-            <span class="font-label-mono text-label-mono text-primary-fixed">ENABLE_RAGDOLL</span>
-          </button>
         </div>
+        <div class="bs-prop-row">
+          <span class="bs-prop-label">SCALE</span>
+          <div style="display: flex; gap: 8px;">
+            <input class="bs-prop-input" type="text" data-prop="scale-x" value="1.00"/>
+            <input class="bs-prop-input" type="text" data-prop="scale-y" value="1.00"/>
+            <input class="bs-prop-input" type="text" data-prop="scale-z" value="1.00"/>
+          </div>
+        </div>
+      </div>
 
+      <div class="bs-section">
+        <div class="bs-section-header">
+          <span>Materials</span>
+          <button class="bs-cta-secondary" style="padding: 2px 8px; font-size: 10px;">NEW</button>
+        </div>
+        <div class="bs-card">
+          <div class="bs-card-thumb">
+            <div class="bs-card-thumb-overlay"><span style="font-family: 'Space Grotesk', monospace; font-size: 10px; color: var(--primary-neon); letter-spacing: 0.05em;">EDIT_MATERIAL</span></div>
+          </div>
+          <div>
+            <label class="bs-label" style="margin-bottom: 8px;">SHADERS: TOON_SKETCH_PRO</label>
+            <input id="textgen-roughness" class="bs-range" type="range" min="0" max="100" value="69"/>
+            <div style="display: flex; justify-content: space-between; font-family: 'Space Grotesk', monospace; font-size: 10px; margin-top: 4px; color: var(--on-surface-variant);">
+              <span>ROUGHNESS</span><span id="textgen-roughness-readout" class="bs-neon">0.69</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bs-section">
+        <div class="bs-section-header">
+          <span>Physics</span>
+          <span class="material-symbols-outlined" style="font-size: 14px;">settings_input_component</span>
+        </div>
+        <button id="rib-physics-toggle" style="display: flex; align-items: center; gap: 8px; padding: 12px; width: 100%; background: var(--surface-lowest); border: 2px solid color-mix(in srgb, var(--primary-neon) 30%, transparent); color: var(--primary-neon); font-family: 'Space Grotesk', monospace; font-size: 10px; font-weight: 700; text-align: left; cursor: pointer;">
+          <span style="width: 16px; height: 16px; background: var(--primary-neon); box-shadow: 0 0 5px var(--primary-neon);"></span>
+          ENABLE_RAGDOLL
+        </button>
       </div>
     </aside>
   </main>
 
-  <!-- STATUS BAR (footer) -->
-  <footer class="h-8 bg-surface-container-lowest border-t-2 border-outline-variant px-margin-desktop flex items-center justify-between z-50">
-    <div class="flex items-center gap-6 font-label-mono text-label-mono uppercase">
-      <div class="flex items-center gap-2 text-on-surface-variant">
-        <span class="w-2 h-2 bg-primary-fixed rounded-full animate-ping"></span>
-        RENDER_ENGINE: <span class="text-primary-fixed">MEME-RAY v1.0</span>
-      </div>
-      <div class="text-on-surface-variant">
-        WORLD_COORDS: <span class="text-secondary-fixed" id="status-coords">X:0.0 Y:0.0 Z:0.0</span>
-      </div>
+  <footer class="bs-statusbar">
+    <div class="bs-statusbar-segment">
+      <span style="display: flex; align-items: center; gap: 8px; color: var(--on-surface-variant);">
+        <span class="bs-statusbar-dot"></span>
+        RENDER_ENGINE: <span class="bs-neon">MEME-RAY v1.0</span>
+      </span>
+      <span style="color: var(--on-surface-variant);">WORLD_COORDS: <span class="bs-uc-readout" id="status-coords">X:0.0 Y:0.0 Z:0.0</span></span>
     </div>
-    <div class="flex items-center gap-8 font-label-mono text-label-mono">
-      <div class="text-on-surface-variant">
-        OBJ: <span class="text-primary-fixed" id="status-obj">0</span> / VERTS: <span class="text-primary-fixed" id="status-verts">0</span>
-      </div>
-      <div class="flex items-center gap-2 bg-surface-container-highest px-3 py-0.5 border border-outline-variant">
-        <span class="text-on-surface-variant">FPS:</span>
-        <span class="text-primary-fixed font-bold neon-glow" id="status-fps">0</span>
-      </div>
+    <div class="bs-statusbar-segment">
+      <span style="color: var(--on-surface-variant);">OBJ: <span id="status-obj" class="bs-neon">0</span> / VERTS: <span id="status-verts" class="bs-neon">0</span></span>
+      <span class="bs-statusbar-fps-chip"><span style="color: var(--on-surface-variant);">FPS:</span><span id="status-fps" class="bs-neon" style="font-weight: 700;">0</span></span>
     </div>
   </footer>
 
-  <!-- Hidden import file input + state debug fallback target -->
   <input type="file" id="import-file-input" accept=".las,.ply,.step,.iges,.stp,.igs" style="display:none;" />
-  <div id="state-debug-panel" style="display:none">
-    <span id="dbg-fps"></span><span id="dbg-frame"></span><span id="dbg-mem"></span>
-  </div>
 
-  <!-- MasterApp boots Three.js + all plugins (sets up renderCanvas + viewport + outliner 
-       listeners). PluginMenu system injects its own menu bar — we hide it in this layout 
-       (the brutalist top nav replaces it). -->
   <script type="module" src="/MasterApp.js"></script>
-  <!-- Shared brutalist glue: FPS counter, status bar, selection sync, menu bar hider -->
   <script type="module" src="/core/scene-utils.js"></script>
+  <script type="module" src="/core/nav.js"></script>
 
   <script>
-    // ─── Studio-specific UI logic (independent of MasterApp) ────────────────────
-
     const $ = (id) => document.getElementById(id);
+    const primMenu = $('primitive-menu');
 
-    // Modal toggle
-    const primitiveMenu = $('primitive-menu');
-    $('add-node-btn')?.addEventListener('click', () => {
-      primitiveMenu.classList.add('show');
-      primitiveMenu.style.display = 'flex';
-    });
-    $('cancel-primitive')?.addEventListener('click', () => {
-      primitiveMenu.style.display = 'none';
-    });
+    // Toggle .is-enter via remove→rAF→add so the entry animation re-fires
+    // every open. Naive add() is a no-op the second time because the panel
+    // is still in the DOM and CSS animations only run on initial mount.
+    function openMenu() {
+      primMenu.hidden = false;
+      const panel = primMenu.querySelector('.bs-modal__panel');
+      panel.classList.remove('is-enter');
+      requestAnimationFrame(() => panel.classList.add('is-enter'));
+    }
+    function closeMenu() {
+      primMenu.hidden = true;
+      primMenu.querySelector('.bs-modal__panel').classList.remove('is-enter');
+    }
 
-    // Primitive buttons → window.addPrimitive event (MasterApp listens)
+    $('add-node-btn')?.addEventListener('click', openMenu);
+    $('cancel-primitive')?.addEventListener('click', closeMenu);
+
     document.querySelectorAll('[data-primitive]').forEach(btn => {
       btn.addEventListener('click', () => {
         const type = btn.dataset.primitive;
         window.dispatchEvent(new CustomEvent('addPrimitive', { detail: { type } }));
-        primitiveMenu.style.display = 'none';
+        closeMenu();
       });
     });
 
-    // SHIFT+A opens modal, ESC closes
     document.addEventListener('keydown', e => {
-      // Skip shortcut handling when typing into an input/textarea
       const tag = e.target.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-
-      if (e.key === 'Escape') {
-        primitiveMenu.style.display = 'none';
-      }
+      if (e.key === 'Escape') closeMenu();
       if (e.shiftKey && e.key.toLowerCase() === 'a') {
         e.preventDefault();
-        primitiveMenu.classList.add('show');
-        primitiveMenu.style.display = 'flex';
+        openMenu();
       }
-    });
-
-    // RENDER button → captureScreenshot CustomEvent (MasterApp handles via plugin)
-    $('btn-render')?.addEventListener('click', () => {
-      window.dispatchEvent(new CustomEvent('render:request'));
-      const btn = $('btn-render');
-      btn.classList.add('hard-shadow-active');
-      setTimeout(() => btn.classList.remove('hard-shadow-active'), 100);
-    });
-
-    // Gizmo toolbar (visual state — MasterApp owns the actual mode)
-    const gizmoBtns = document.querySelectorAll('.gizmo-btn');
-    gizmoBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
-        const mode = btn.dataset.gizmoMode;
-        // Map UI affordance to MasterApp Translate/Rotate/Scale custom events
-        const mapping = { move: 'translate', rotate: 'rotate', scale: 'scale', pan: 'resetView' };
-        if (mapping[mode]) {
-          window.dispatchEvent(new CustomEvent(mapping[mode] === 'resetView' ? 'resetView' : (mode === 'move' ? 'gizmo:set:translate' : (mode === 'rotate' ? 'gizmo:set:rotate' : 'gizmo:set:scale'))));
-        }
-        // Visual highlight toggle
-        gizmoBtns.forEach(b => {
-          b.classList.remove('bg-primary-container', 'text-on-primary-container');
-          b.classList.add('hover:bg-primary-container', 'hover:text-on-primary-container');
-        });
-        btn.classList.add('bg-primary-container', 'text-on-primary-container');
-        btn.classList.remove('hover:bg-primary-container', 'hover:text-on-primary-container');
-      });
     });
 
     // Roughness slider live readout
-    const roughness = document.querySelector('input[type="range"][min="0"][max="100"]');
-    $('roughness-readout') && roughness && roughness.addEventListener('input', () => {
-      $('roughness-readout').textContent = (roughness.value / 100).toFixed(2);
+    $('textgen-roughness')?.addEventListener('input', e => {
+      $('textgen-roughness-readout').textContent = (e.target.value / 100).toFixed(2);
     });
 
-    // FPS counter / selection sync / status bar / menu bar hider live in
-    // core/scene-utils.js (auto-imported above). window.__masterScene and
-    // window.__masterCamera are also maintained there for legacy consumers.
+    // Gizmo toolbar — visual state + MasterApp event mapping
+    const gizmoBtns = document.querySelectorAll('.bs-gizmo-btn');
+    gizmoBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mode = btn.dataset.gizmoMode;
+        const mapping = { move: 'gizmo:set:translate', rotate: 'gizmo:set:rotate', scale: 'gizmo:set:scale', pan: 'resetView' };
+        if (mapping[mode]) window.dispatchEvent(new CustomEvent(mapping[mode]));
+        gizmoBtns.forEach(b => b.classList.remove('is-active'));
+        btn.classList.add('is-active');
+      });
+    });
 
-    // Outliner — refresh when scene objects change (window.__masterScene is
-    // kept in sync by core/scene-utils.js)
+    // Dynamic outliner — refresh when scene objects change
+    // window.__masterScene is maintained by core/scene-utils.js
     function refreshOutliner() {
       const list = $('outliner-list');
       if (!list || !window.__masterScene) return;
+      // Survive the OUTLINER section-title header
+      const headerTitle = list.querySelector('.bs-aside-section-title');
       const rows = window.__masterScene.children.filter(o => o.userData?.isManagedObject);
-      // (re-render out of band; clear everything except the header)
-      const headerEl = list.querySelector('div:first-child');
-      list.innerHTML = '';
-      if (headerEl) list.appendChild(headerEl);
-      rows.forEach(obj => {
+      // Preserve the section title, drop the rest
+      const allChildren = Array.from(list.children);
+      allChildren.forEach(c => { if (!c.classList.contains('bs-aside-section-title')) c.remove(); });
+      // Find header (move it to top again in case)
+      // Append rows as bs-aside-row buttons
+      rows.forEach((obj, i) => {
         const btn = document.createElement('button');
-        btn.className = 'flex items-center gap-3 p-2 text-on-surface-variant hover:text-primary-fixed hover:bg-surface-container-high transition-colors font-label-mono text-label-mono w-full text-left';
-        btn.innerHTML = `<span class="material-symbols-outlined text-sm">view_in_ar</span>${obj.name}`;
+        btn.className = 'bs-aside-row' + (i === 0 ? ' is-active' : '');
+        btn.dataset.outlinerName = obj.name;
+        btn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 14px;">view_in_ar</span>' + obj.name;
         btn.addEventListener('click', () => {
+          list.querySelectorAll('.bs-aside-row').forEach(b => b.classList.remove('is-active'));
+          btn.classList.add('is-active');
           window.dispatchEvent(new CustomEvent('select:byName', { detail: { name: obj.name } }));
         });
         list.appendChild(btn);
       });
     }
-    // Refresh outliner periodically
     setInterval(refreshOutliner, 800);
   </script>
 

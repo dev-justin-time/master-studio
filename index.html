@@ -485,6 +485,36 @@
     @keyframes dash {
       to { stroke-dashoffset: -1000; }
     }
+
+    /* ── GFX Resource Panel (populated by GfxResourcePanel plugin) ── */
+    .gfx-panel { background: var(--surface-lowest); border: 2px solid var(--outline-variant); font-family: 'Space Grotesk', monospace; font-size: 10px; }
+    .gfx-panel-header { background: var(--surface-container); border-bottom: 2px solid var(--outline-variant); padding: 6px 10px; display: flex; align-items: center; gap: 8px; color: var(--secondary-neon); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+    .gfx-panel-header > span:first-child { color: var(--primary-neon); font-size: 14px; }
+    .gfx-panel-count { margin-left: auto; background: var(--primary-neon); color: var(--border); padding: 1px 6px; font-weight: 700; min-width: 20px; text-align: center; }
+    .gfx-recommend-banner { background: rgba(255,225,109,0.12); border-bottom: 2px solid var(--secondary-neon); padding: 6px 10px; display: flex; align-items: center; gap: 8px; color: var(--secondary-neon); font-size: 10px; line-height: 1.4; }
+    .gfx-recommend-banner > span:first-child { font-size: 14px; flex-shrink: 0; }
+    .gfx-recommend-banner #gfx-recommend-msg { flex: 1; }
+    .gfx-dismiss-btn { background: transparent; border: 2px solid var(--secondary-neon); color: var(--secondary-neon); width: 20px; height: 20px; font-size: 14px; font-weight: 700; cursor: pointer; padding: 0; line-height: 1; flex-shrink: 0; font-family: inherit; }
+    .gfx-dismiss-btn:hover { background: var(--secondary-neon); color: var(--border); }
+    .gfx-table { width: 100%; border-collapse: collapse; font-family: 'Space Grotesk', monospace; font-size: 10px; }
+    .gfx-table th { background: var(--surface-container); color: var(--on-surface-variant); text-align: left; padding: 4px 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--outline-variant); }
+    .gfx-table th.gfx-th-bytes, .gfx-table th.gfx-th-age { text-align: right; }
+    .gfx-table td { padding: 4px 6px; border-bottom: 1px solid var(--outline-variant); color: var(--on-surface); vertical-align: middle; }
+    .gfx-table tr:hover td { background: var(--surface-container); }
+    .gfx-table .gfx-empty td { text-align: center; color: var(--on-surface-variant); opacity: 0.6; padding: 12px; }
+    .gfx-cell-id { font-family: 'Plus Jakarta Sans', monospace; color: var(--on-surface-variant); max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .gfx-cell-bytes { color: var(--primary-neon); font-weight: 700; text-align: right; white-space: nowrap; }
+    .gfx-cell-label { color: var(--on-surface); max-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .gfx-cell-age { color: var(--on-surface-variant); text-align: right; white-space: nowrap; }
+    .gfx-type-badge { display: inline-block; padding: 1px 4px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; border: 1px solid; }
+    .gfx-type-water-cubemap { background: rgba(68,170,255,0.15); color: #44aaff; border-color: #44aaff; }
+    .gfx-type-shadow-map { background: rgba(179,136,255,0.15); color: #b388ff; border-color: #b388ff; }
+    .gfx-type-hdri-envmap { background: rgba(255,149,0,0.15); color: #ff9500; border-color: #ff9500; }
+    .gfx-type-pointcloud-geometry { background: rgba(0,229,255,0.15); color: #00e5ff; border-color: #00e5ff; }
+    .gfx-type-cad-geometry { background: rgba(118,255,3,0.15); color: #76ff03; border-color: #76ff03; }
+    .gfx-type-unknown { background: rgba(185,204,175,0.15); color: var(--on-surface-variant); border-color: var(--outline-variant); }
+    .gfx-panel-footer { background: var(--surface-container); border-top: 1px solid var(--outline-variant); padding: 4px 10px; color: var(--on-surface-variant); font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .gfx-panel-footer #gfx-total { color: var(--primary-neon); font-weight: 700; }
   </style>
 </head>
 <body>
@@ -494,7 +524,17 @@
       <canvas id="renderCanvas"></canvas>
       <canvas id="lassoOverlay" style="position:absolute;top:0;left:0;width:100%;height:100%;display:none;pointer-events:none;z-index:10;"></canvas>
       <div id="drop-zone">
-        <div id="drop-zone-text">Drop point cloud or CAD file here</div>
+        <!-- Drop-zone label. FULLY DYNAMIC — plugins append their format
+         descriptors at runtime via `import:register-zone-text` (see
+         MasterApp._initImportDomHandlers). The host composes an
+         Oxford-style join of registered labels, so dropping a `.las`,
+         `.step`, or `.glb` all route to the same composable prompt.
+         The markup below is a generic pre-script-load fallback only —
+         before any plugin's `init()` finishes, the user sees this
+         placeholder. Once GoPlugin + ModelImportPlugin both
+         dispatch (microseconds after page load), the text rebuilds
+         to e.g. "Drop point clouds, CAD, or 3D models here". -->
+        <div id="drop-zone-text">Drop files here</div>
       </div>
       <div id="controls-hint" style="position:absolute;bottom:12px;left:12px;font-size:11px;color:#3b4b35;font-family:'Space Grotesk',monospace;pointer-events:none;z-index:5;">
         <b>G</b> Move &nbsp; <b>R</b> Rotate &nbsp; <b>S</b> Scale &nbsp; <b>L</b> Lasso &nbsp; <b>T</b> Sticky &nbsp; <b>P</b> Debug &nbsp; <b>1-3</b> Color Select
@@ -534,13 +574,53 @@
         <button id="btn-translate" title="Translate mode (G)">↔ Move</button>
         <button id="btn-rotate" title="Rotate mode (R)">↻ Rotate</button>
         <button id="btn-scale" title="Scale mode (S)">⤢ Scale</button>
-        <button id="btn-import" title="Import point cloud or CAD file">📥 Import</button>
+        <button id="btn-import" title="Import point cloud or CAD file via Go Wasm">📥 Import</button>
+        <!-- Separate button for the 3D-model path so the OS file picker
+             only shows model formats — users with a .glb don't have to
+             navigate a multi-format dropdown. The hidden input below
+             (id="model-file-input") carries the matching accept list
+             and is wired in MasterApp._initImportHandlers. -->
+        <button id="btn-import-model" title="Import 3D model (.glb, .gltf, .obj, .stl, .fbx)">📦 3D Model</button>
+        <a id="btn-usecase" href="/usecase.html" title="Open Wasm use case demo page" style="text-decoration:none;">🧪 Wasm</a>
         <span id="sticky-indicator">Sticky: OFF</span>
         <button id="btn-debug" title="Toggle physics debug overlay (P)">🐛 Debug</button>
       </div>
 
-      <!-- Import file input (hidden) -->
-      <input type="file" id="import-file-input" accept=".las,.ply,.step,.iges,.stp,.igs" style="display:none;" />
+      <!-- History / File actions (UndoManager + SceneIO surface) -->
+      <div id="history-actions" style="padding:8px 14px;border-top:2px solid var(--outline-variant);background:var(--surface-container);display:flex;flex-wrap:wrap;gap:6px;">
+        <button id="btn-undo" title="Undo last action (Ctrl+Z)" style="background:var(--surface-lowest);border:2px solid var(--border);color:var(--on-surface);padding:4px 8px;font-family:'Space Grotesk',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;cursor:pointer;box-shadow:2px 2px 0 0 var(--border);">↶ Undo</button>
+        <button id="btn-redo" title="Redo (Ctrl+Shift+Z)" style="background:var(--surface-lowest);border:2px solid var(--border);color:var(--on-surface);padding:4px 8px;font-family:'Space Grotesk',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;cursor:pointer;box-shadow:2px 2px 0 0 var(--border);">↷ Redo</button>
+        <span style="flex:1;"></span>
+        <button id="btn-save-scene" title="Save current scene as JSON" style="background:var(--surface-lowest);border:2px solid var(--primary-neon);color:var(--primary-neon);padding:4px 8px;font-family:'Space Grotesk',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;cursor:pointer;box-shadow:2px 2px 0 0 var(--primary-neon);">💾 Save</button>
+        <button id="btn-load-scene" title="Load scene from JSON" style="background:var(--surface-lowest);border:2px solid var(--primary-neon);color:var(--primary-neon);padding:4px 8px;font-family:'Space Grotesk',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;cursor:pointer;box-shadow:2px 2px 0 0 var(--primary-neon);">📂 Load</button>
+        <button id="btn-clear-scene" title="Remove all scene objects (lights + grid preserved)" style="background:var(--surface-lowest);border:2px solid var(--error-neon);color:var(--error-neon);padding:4px 8px;font-family:'Space Grotesk',monospace;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;cursor:pointer;box-shadow:2px 2px 0 0 var(--error-neon);">🗑 Clear</button>
+        <input type="file" id="scene-load-input" accept=".json" style="display:none;" />
+      </div>
+
+      <!-- Undo/Redo history panel mount (UndoManager.renderToDOM populates this) -->
+      <div id="undo-history-container" style="border-top:2px solid var(--outline-variant);background:var(--surface-container);max-height:200px;overflow-y:auto;"></div>
+
+      <!-- Import file inputs (hidden) -->
+      <!-- Unified import input. Accept list is FULLY DYNAMIC — populated
+     at runtime by GoPlugin (point clouds + CAD) and ModelImportPlugin
+     (3D models) via the `import:register-extension` window event
+     (consumed by MasterApp._initImportDomHandlers). The baseline
+     accept attribute is intentionally empty so any Wasm-or-model
+     extension added in code propagates to the OS file picker
+     without a markup edit. Until scripts load the picker shows ALL
+     files (acceptable trade-off — the listener rebuilds the attribute
+     on every plugin dispatch, so the final state lands ~immediately). -->
+      <input type="file" id="import-file-input" accept="" style="display:none;" />
+      <!-- Model-only input: 3D model formats. The accept attribute is
+     JS-synced from `SUPPORTED_EXTS` (plugins/ModelImportPlugin.js)
+     by MasterApp._initImportHandlers — the markup intentionally
+     does NOT carry a hardcoded accept list, so adding a model
+     format in ModelImportPlugin.js automatically propagates to the
+     OS file picker with no markup edit. The button to the left of
+     it (#btn-import-model) is the only user entry point; routes
+     through `_importFile(file)` (which dispatches by extension
+     to ModelImportPlugin). -->
+      <input type="file" id="model-file-input" style="display:none;" />
 
       <!-- StateManager Debug Panel -->
       <div id="state-debug-panel">
@@ -555,11 +635,127 @@
           <div>Buffer: <span id="dbg-buf">--</span></div>
           <div style="color:var(--primary-neon);margin-top:2px;">Experts: <span id="dbg-experts">--</span></div>
           <div>Listeners: <span id="dbg-listeners">--</span></div>
+
+          <!-- Live GFX resource table (populated by GfxResourcePanel plugin) -->
+          <div id="gfx-resource-panel-container" class="gfx-panel" style="margin-top:8px;">
+            <div class="gfx-panel-header">
+              <span>🧊</span>
+              <span>GFX RESOURCES</span>
+              <span class="gfx-panel-count" id="gfx-count">0</span>
+            </div>
+            <div class="gfx-recommend-banner" id="gfx-recommend" style="display:none;">
+              <span>⚠</span>
+              <span id="gfx-recommend-msg">—</span>
+              <button id="gfx-recommend-dismiss" class="gfx-dismiss-btn" title="Dismiss recommendation">×</button>
+            </div>
+            <div class="gfx-recommend-banner" data-rec="shadows" style="display:none;">
+              <span>🌑</span>
+              <span class="gfx-rec-msg">—</span>
+              <button class="gfx-dismiss-btn gfx-rec-dismiss" title="Dismiss shadow map cleanup recommendation">×</button>
+            </div>
+            <div class="gfx-recommend-banner" data-rec="hdri" style="display:none;">
+              <span>☀</span>
+              <span class="gfx-rec-msg">—</span>
+              <button class="gfx-dismiss-btn gfx-rec-dismiss" title="Dismiss HDRI cleanup recommendation">×</button>
+            </div>
+            <div class="gfx-recommend-banner" data-rec="pointclouds" style="display:none;">
+              <span>☁</span>
+              <span class="gfx-rec-msg">—</span>
+              <button class="gfx-dismiss-btn gfx-rec-dismiss" title="Dismiss point cloud cleanup recommendation">×</button>
+            </div>
+            <div class="gfx-recommend-banner" data-rec="cad" style="display:none;">
+              <span>📐</span>
+              <span class="gfx-rec-msg">—</span>
+              <button class="gfx-dismiss-btn gfx-rec-dismiss" title="Dismiss CAD cleanup recommendation">×</button>
+            </div>
+            <table class="gfx-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>TYPE</th>
+                  <th class="gfx-th-bytes">BYTES</th>
+                  <th>LABEL</th>
+                  <th class="gfx-th-age">AGE</th>
+                </tr>
+              </thead>
+              <tbody id="gfx-tbody">
+                <tr class="gfx-empty"><td colspan="5">No GFX resources tracked</td></tr>
+              </tbody>
+            </table>
+            <div class="gfx-panel-footer">
+              <span>TOTAL: <span id="gfx-total">0 B</span></span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- MasterApp boots Three.js + all plugins -->
   <script type="module" src="/MasterApp.js"></script>
+  <!-- Shared brutalist glue: hides MenuSystemPlugin's auto-injected menu
+       bar (MasterApp brings this plugin in, and its bar would overlap
+       our #sidebar on this layout). Other features (FPS counter, status
+       bar, selection sync) no-op here since the page doesn't render
+       those elements. EXPLICIT dependency — not auto-imported by
+       MasterApp. -->
+  <script type="module" src="/core/scene-utils.js"></script>
+
+  <!-- Pre-populate the visual node graph with 4 demo cards + SVG wires
+       so the graph isn't empty at page load. Pure bootstrap: MasterApp
+       still owns all 3D scene state + adds real wired nodes via the
+       Add Node menu; this script only renders visual cards and SVG
+       noodle paths (cards are NOT registered in nodeGraph.activeGraph,
+       so they don't compute anything — they're a static "this is what
+       a worked-up scene looks like" preview). Idempotent via data-demo. -->
+  <script type="module">
+    import { createNodeCard } from './plugins/NodeFactory.js';
+
+    // Wrap in if-else (not early-return) — Node v24's `--check` parser
+    // rejects top-level `return` in ESM modules; the browser accepts
+    // it but universal cleanliness wins.
+    const graph = document.getElementById('node-graph-area');
+    if (graph && !graph.querySelector('.node-card[data-demo]')) {
+      const cube   = createNodeCard(40,  50,  'Cube Primitive',   [],                          ['Mesh']);
+      const cone   = createNodeCard(40,  220, 'Cone Primitive',   [],                          ['Mesh']);
+      const sphere = createNodeCard(40,  390, 'Sphere Primitive', [],                          ['Mesh']);
+      const merge  = createNodeCard(280, 220, 'Merge \u2192 Scene',   ['Mesh', 'Mesh', 'Mesh'], ['Unity']);
+      [cube, cone, sphere, merge].forEach(n => { n.dataset.demo = '1'; graph.appendChild(n); });
+
+      const svgNS = 'http://www.w3.org/2000/svg';
+      const noodles = graph.querySelector('.noodle-layer');
+      if (!noodles) {
+        console.info('[demo-nodes] .noodle-layer missing — wires skipped, cards still render');
+      } else {
+        const mergeInputs = merge.querySelectorAll('.node-inputs .pin-dot');
+        [cube, cone, sphere].forEach((src, i) => {
+          const outPin = src.querySelector('.node-outputs .pin-dot');
+          const inPin  = mergeInputs[i];
+          if (!outPin || !inPin) return; // inside forEach callback — valid `return`
+          const svgRect = noodles.getBoundingClientRect();
+          const a = outPin.getBoundingClientRect();
+          const b = inPin.getBoundingClientRect();
+          const x1 = a.right  - svgRect.left;
+          const y1 = a.top + a.height / 2 - svgRect.top;
+          const x2 = b.left   - svgRect.left;
+          const y2 = b.top + b.height / 2 - svgRect.top;
+          // Clamp dx to (x2 - x1) / 2 so control points stay within the
+          // segment, otherwise the bezier loops back when the gap (~12px
+          // for min-width source cards) is smaller than the threshold.
+          const dx = Math.min(60, (x2 - x1) / 2);
+          const p = document.createElementNS(svgNS, 'path');
+          p.setAttribute('class', 'noodle-path');
+          p.setAttribute('fill', 'none');
+          p.setAttribute('stroke', '#02e600');
+          p.setAttribute('stroke-width', '2');
+          p.setAttribute('opacity', '0.6');
+          p.setAttribute('d', `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`);
+          noodles.appendChild(p);
+        });
+      }
+    }
+  </script>
+  <!-- Shared top-nav injector (40px compact, current=Node Editor) -->
+  <script type="module" src="/core/nav.js"></script>
 </body>
 </html>

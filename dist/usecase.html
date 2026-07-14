@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MEME STUDIO | Wasm Use Cases</title>
+
+  <!-- Tailwind (CDN prototype — same brutalist theme as studio.html) -->
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+
+  <link href="https://fonts.googleapis.com/css2?family=Anybody:wght@700;800;900&family=Plus+Jakarta+Sans:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+
+  <style>
+    .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+    .neon-glow { text-shadow: 0 0 10px rgba(0, 255, 0, 0.7); }
+
+    /* Brutalist scrollbars */
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: #131313; }
+    ::-webkit-scrollbar-thumb { background: #3b4b35; }
+    ::-webkit-scrollbar-thumb:hover { background: #02e600; }
+
+    /* Three.js canvas */
+    #renderCanvas { display: block; width: 100%; height: 100%; }
+
+    /* Sidebar tab buttons */
+    .uc-tab {
+      transition: all 0.12s ease;
+      border-left: 4px solid transparent;
+    }
+    .uc-tab:hover {
+      background: #1c1b1b;
+      border-left-color: #3b4b35;
+    }
+    .uc-tab.active {
+      background: #1c1b1b;
+      border-left-color: #02e600;
+      box-shadow: inset 4px 0 0 0 #02e600;
+    }
+
+    /* Use case panel sections */
+    .uc-panel { display: none; }
+    .uc-panel.active { display: block; }
+
+    /* Console line entry animation */
+    @keyframes console-flash {
+      0%   { background: rgba(2, 230, 0, 0.18); }
+      100% { background: transparent; }
+    }
+    .console-line.fresh { animation: console-flash 0.8s ease-out; }
+
+    /* Loading pulse for the Wasm status dots */
+    @keyframes status-pulse {
+      0%, 100% { opacity: 0.4; }
+      50%      { opacity: 1; }
+    }
+    .status-dot.loading { animation: status-pulse 1.2s infinite ease-in-out; }
+
+    /* Action button (brutalist hard-shadow press) */
+    .uc-action {
+      transition: box-shadow 0.08s, transform 0.08s;
+    }
+    .uc-action:hover { box-shadow: 4px 4px 0 0 #02e600; transform: translate(-1px, -1px); }
+    .uc-action:active { box-shadow: 0 0 0 0 #02e600; transform: translate(2px, 2px); }
+
+    /* Range input brutalist style */
+    input[type="range"].uc-range {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      background: #2a2a2a;
+      outline: none;
+      border: 1px solid #3b4b35;
+    }
+    input[type="range"].uc-range::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      background: #02e600;
+      cursor: pointer;
+      border: 2px solid #000;
+    }
+  </style>
+
+  <script src="/core/tailwind-config.js"></script>
+  <script type="module" crossorigin src="/assets/usecase-BUYIm04Z.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/WasmBridge-CrQEFFpc.js">
+</head>
+<body class="bg-surface text-on-surface overflow-hidden h-screen flex flex-col">
+
+  <!-- TOP NAV -->
+  <nav class="fixed top-0 w-full z-50 flex justify-between items-center px-margin-desktop h-16 bg-surface border-b-2 border-outline-variant shadow-[4px_4px_0px_0px_#02e600]">
+    <div class="flex items-center gap-8">
+      <a class="font-headline-md text-headline-md text-primary-fixed uppercase tracking-tighter italic" href="/index.html">MEME STUDIO</a>
+      <div class="hidden md:flex gap-6 items-center">
+        <a class="text-on-surface-variant font-medium font-label-bold text-label-bold hover:text-primary-fixed hover:bg-surface-container-highest transition-all duration-100" href="/index.html">Node Editor</a>
+        <a class="text-on-surface-variant font-medium font-label-bold text-label-bold hover:text-primary-fixed hover:bg-surface-container-highest transition-all duration-100" href="/studio.html">Brutalist</a>
+        <a class="text-primary-fixed font-bold border-b-2 border-primary-fixed font-label-bold text-label-bold py-5" href="#">Wasm Demos</a>
+        <a class="text-on-surface-variant font-medium font-label-bold text-label-bold hover:text-primary-fixed hover:bg-surface-container-highest transition-all duration-100" href="/scene.html">Text Gen</a>
+      </div>
+    </div>
+
+    <!-- Wasm Load Status -->
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-3 px-4 py-2 bg-surface-container-lowest border-2 border-outline-variant font-label-mono text-label-mono">
+        <span class="text-on-surface-variant">RUST</span>
+        <span class="status-dot loading w-2 h-2 rounded-full bg-yellow-500" id="status-rust-dot"></span>
+        <span class="text-on-surface-variant" id="status-rust-text">loading…</span>
+        <span class="text-outline">|</span>
+        <span class="text-on-surface-variant">GO</span>
+        <span class="status-dot loading w-2 h-2 rounded-full bg-yellow-500" id="status-go-dot"></span>
+        <span class="text-on-surface-variant" id="status-go-text">loading…</span>
+      </div>
+    </div>
+  </nav>
+
+  <main class="flex flex-1 pt-16 overflow-hidden relative">
+
+    <!-- LEFT SIDEBAR (Use case tabs + controls) -->
+    <aside class="fixed left-0 top-16 h-[calc(100vh-64px)] w-80 bg-surface-container-lowest border-r-2 border-outline-variant z-40 flex flex-col">
+
+      <!-- Tab list -->
+      <div class="border-b-2 border-outline-variant">
+        <div class="text-primary-fixed font-label-bold text-label-bold uppercase tracking-widest p-4 flex items-center gap-2">
+          <span class="material-symbols-outlined text-sm">memory</span>
+          6 WASM OPERATIONS
+        </div>
+        <div class="flex flex-col" id="uc-tab-list">
+          <button class="uc-tab active text-left p-4 font-label-bold text-label-bold text-primary-fixed flex items-center gap-3" data-uc="csg">
+            <span class="material-symbols-outlined">join</span>
+            <span>1. CSG BOOLEAN</span>
+          </button>
+          <button class="uc-tab text-left p-4 font-label-bold text-label-bold text-on-surface-variant flex items-center gap-3" data-uc="decimate">
+            <span class="material-symbols-outlined">compress</span>
+            <span>2. DECIMATE MESH</span>
+          </button>
+          <button class="uc-tab text-left p-4 font-label-bold text-label-bold text-on-surface-variant flex items-center gap-3" data-uc="bvh">
+            <span class="material-symbols-outlined">select_all</span>
+            <span>3. BVH BOUNDS</span>
+          </button>
+          <button class="uc-tab text-left p-4 font-label-bold text-label-bold text-on-surface-variant flex items-center gap-3" data-uc="physics">
+            <span class="material-symbols-outlined">bolt</span>
+            <span>4. PHYSICS STEP</span>
+          </button>
+          <button class="uc-tab text-left p-4 font-label-bold text-label-bold text-on-surface-variant flex items-center gap-3" data-uc="pointcloud">
+            <span class="material-symbols-outlined">cloud</span>
+            <span>5. POINT CLOUD</span>
+          </button>
+          <button class="uc-tab text-left p-4 font-label-bold text-label-bold text-on-surface-variant flex items-center gap-3" data-uc="cad">
+            <span class="material-symbols-outlined">architecture</span>
+            <span>6. CAD IMPORT</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Active use case panel (controls) -->
+      <div class="flex-1 overflow-y-auto p-4 space-y-4">
+
+        <!-- UC1: CSG -->
+        <div class="uc-panel active" data-uc="csg">
+          <div class="text-primary-fixed font-headline-md text-headline-md mb-2">CSG BOOLEAN</div>
+          <p class="font-label-mono text-label-mono text-on-surface-variant opacity-80 mb-4">
+            Cuts/merges two meshes using Rust Wasm. Spawns a red sphere and green box that intersect.
+          </p>
+          <label class="font-label-mono text-label-mono text-on-surface-variant block mb-1">OPERATION</label>
+          <select id="csg-op" class="w-full bg-surface border-2 border-outline-variant focus:border-primary-fixed-dim text-primary-fixed font-label-mono text-label-mono p-2 outline-none">
+            <option value="union">UNION</option>
+            <option value="subtract">SUBTRACT</option>
+            <option value="intersect">INTERSECT</option>
+          </select>
+          <button class="uc-action w-full mt-4 bg-primary-container text-on-primary-container border-2 border-black font-label-bold text-label-bold py-3 shadow-[3px_3px_0px_0px_#000]" id="csg-run">
+            ▶ RUN CSG (RUST WASM)
+          </button>
+          <div class="mt-4 p-3 bg-surface-container-high border border-outline-variant font-label-mono text-label-mono">
+            <div class="text-on-surface-variant opacity-70">WHAT THIS DOES</div>
+            <div class="text-primary-fixed mt-1" id="csg-desc">Sends both meshes' position/index arrays to <code>compute_boolean</code> in Rust Wasm. The returned Float32Array + Uint32Array is wrapped in a new BufferGeometry.</div>
+          </div>
+        </div>
+
+        <!-- UC2: Decimate -->
+        <div class="uc-panel" data-uc="decimate">
+          <div class="text-primary-fixed font-headline-md text-headline-md mb-2">DECIMATE MESH</div>
+          <p class="font-label-mono text-label-mono text-on-surface-variant opacity-80 mb-4">
+            Reduces a high-poly torus knot to a target triangle percentage. Watch the wireframe density drop.
+          </p>
+          <label class="font-label-mono text-label-mono text-on-surface-variant block mb-1">TARGET %: <span class="text-primary-fixed" id="decimate-pct-readout">50%</span></label>
+          <input type="range" id="decimate-pct" class="uc-range w-full" min="10" max="100" value="50" step="5"/>
+          <div class="flex justify-between font-label-mono text-label-mono text-on-surface-variant opacity-60 mt-1">
+            <span>10%</span><span>100%</span>
+          </div>
+          <button class="uc-action w-full mt-4 bg-primary-container text-on-primary-container border-2 border-black font-label-bold text-label-bold py-3 shadow-[3px_3px_0px_0px_#000]" id="decimate-run">
+            ▶ RUN DECIMATE (RUST WASM)
+          </button>
+          <div class="mt-4 p-3 bg-surface-container-high border border-outline-variant font-label-mono text-label-mono">
+            <div class="text-on-surface-variant opacity-70">WHAT THIS DOES</div>
+            <div class="text-primary-fixed mt-1">Calls <code>decimate_mesh(positions, indices, percent)</code> which keeps every Nth triangle, then rebuilds a compact vertex buffer. Result re-attached as a wireframe mesh so you can see the reduced edge count.</div>
+          </div>
+        </div>
+
+        <!-- UC3: BVH -->
+        <div class="uc-panel" data-uc="bvh">
+          <div class="text-primary-fixed font-headline-md text-headline-md mb-2">BVH BOUNDS</div>
+          <p class="font-label-mono text-label-mono text-on-surface-variant opacity-80 mb-4">
+            Computes the AABB of a mesh via Rust Wasm. The result is rendered as a neon-green wireframe around the source mesh.
+          </p>
+          <button class="uc-action w-full mt-4 bg-primary-container text-on-primary-container border-2 border-black font-label-bold text-label-bold py-3 shadow-[3px_3px_0px_0px_#000]" id="bvh-run">
+            ▶ COMPUTE BOUNDS (RUST WASM)
+          </button>
+          <div class="mt-4 p-3 bg-surface-container-high border border-outline-variant font-label-mono text-label-mono">
+            <div class="text-on-surface-variant opacity-70">WHAT THIS DOES</div>
+            <div class="text-primary-fixed mt-1">Calls <code>generate_bvh(positions, indices)</code> which streams all positions through <code>chunks_exact(3)</code> to find the min/max in each axis. The returned AABB is drawn as a <code>THREE.Box3Helper</code>.</div>
+          </div>
+        </div>
+
+        <!-- UC4: Physics -->
+        <div class="uc-panel" data-uc="physics">
+          <div class="text-primary-fixed font-headline-md text-headline-md mb-2">PHYSICS STEP</div>
+          <p class="font-label-mono text-label-mono text-on-surface-variant opacity-80 mb-4">
+            Runs a semi-implicit Euler integration with gravity + ground collision in Rust Wasm. 50 colored cubes drop in real time.
+          </p>
+          <label class="font-label-mono text-label-mono text-on-surface-variant block mb-1">CUBE COUNT: <span class="text-primary-fixed" id="physics-count-readout">50</span></label>
+          <input type="range" id="physics-count" class="uc-range w-full" min="10" max="200" value="50" step="10"/>
+          <div class="flex gap-2 mt-4">
+            <button class="uc-action flex-1 bg-primary-container text-on-primary-container border-2 border-black font-label-bold text-label-bold py-3 shadow-[3px_3px_0px_0px_#000]" id="physics-run">
+              ▶ START
+            </button>
+            <button class="uc-action flex-1 bg-surface border-2 border-primary-fixed-dim text-primary-fixed font-label-bold text-label-bold py-3" id="physics-reset">
+              ↺ RESET
+            </button>
+          </div>
+          <div class="mt-4 p-3 bg-surface-container-high border border-outline-variant font-label-mono text-label-mono">
+            <div class="text-on-surface-variant opacity-70">WHAT THIS DOES</div>
+            <div class="text-primary-fixed mt-1">Each frame, packs all bodies into a JS array, sends to <code>step_physics</code>, applies gravity <code>v.y -= 9.81 * dt</code>, integrates position, and clamps to the ground plane. Result is split back to per-cube <code>position/velocity</code>.</div>
+          </div>
+        </div>
+
+        <!-- UC5: Point Cloud -->
+        <div class="uc-panel" data-uc="pointcloud">
+          <div class="text-primary-fixed font-headline-md text-headline-md mb-2">POINT CLOUD</div>
+          <p class="font-label-mono text-label-mono text-on-surface-variant opacity-80 mb-4">
+            Parses a binary XYZ buffer via Go Wasm. We generate 5,000 random points in JS, hand the bytes to Go, and Go returns the parsed positions as a Float32Array.
+          </p>
+          <label class="font-label-mono text-label-mono text-on-surface-variant block mb-1">POINT COUNT: <span class="text-primary-fixed" id="pc-count-readout">5000</span></label>
+          <input type="range" id="pc-count" class="uc-range w-full" min="100" max="50000" value="5000" step="100"/>
+          <button class="uc-action w-full mt-4 bg-primary-container text-on-primary-container border-2 border-black font-label-bold text-label-bold py-3 shadow-[3px_3px_0px_0px_#000]" id="pc-run">
+            ▶ PARSE (GO WASM)
+          </button>
+          <div class="mt-4 p-3 bg-surface-container-high border border-outline-variant font-label-mono text-label-mono">
+            <div class="text-on-surface-variant opacity-70">WHAT THIS DOES</div>
+            <div class="text-primary-fixed mt-1">JS builds a packed binary buffer (3 little-endian float32s per point). Go's <code>parsePointCloud</code> copies bytes with <code>js.CopyBytesToGo</code>, decodes with <code>binary.LittleEndian.Uint32 + math.Float32frombits</code>, and returns positions/colors as Float32Arrays. Rendered as <code>THREE.Points</code>.</div>
+          </div>
+        </div>
+
+        <!-- UC6: CAD -->
+        <div class="uc-panel" data-uc="cad">
+          <div class="text-primary-fixed font-headline-md text-headline-md mb-2">CAD IMPORT</div>
+          <p class="font-label-mono text-label-mono text-on-surface-variant opacity-80 mb-4">
+            Routes a CAD-shaped buffer through Go Wasm's <code>importCAD</code>. The placeholder parser returns a single cube mesh — enough to verify the bridge works end-to-end.
+          </p>
+          <button class="uc-action w-full mt-4 bg-primary-container text-on-primary-container border-2 border-black font-label-bold text-label-bold py-3 shadow-[3px_3px_0px_0px_#000]" id="cad-run">
+            ▶ IMPORT (GO WASM)
+          </button>
+          <div class="mt-4 p-3 bg-surface-container-high border border-outline-variant font-label-mono text-label-mono">
+            <div class="text-on-surface-variant opacity-70">WHAT THIS DOES</div>
+            <div class="text-primary-fixed mt-1">Builds a mock STEP-shaped binary buffer in JS, hands it to <code>importCAD</code>, Go returns <code>{meshes: [{positions, indices}]}</code>. We rebuild each mesh with a distinct face color and group them as a <code>THREE.Group</code>.</div>
+          </div>
+        </div>
+
+      </div>
+    </aside>
+
+    <!-- RIGHT MAIN (Viewport + bottom console) -->
+    <section class="flex-1 ml-80 flex flex-col bg-surface relative">
+      <div class="flex-1 relative overflow-hidden" id="viewport">
+        <div class="absolute inset-0 z-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#1a2e1a] to-surface"></div>
+        <div class="absolute top-4 left-4 z-10 px-4 py-2 bg-surface-container-highest/80 border-2 border-primary-fixed-dim text-primary-fixed font-label-mono text-label-mono backdrop-blur-md">
+          VIEWPORT: <span id="uc-name">CSG BOOLEAN</span>
+        </div>
+        <canvas id="renderCanvas"></canvas>
+        <div class="absolute bottom-4 right-4 z-10 px-3 py-1 bg-surface-container-lowest/80 border border-outline-variant text-on-surface-variant font-label-mono text-[10px]">
+          SCENE: <span class="text-primary-fixed" id="scene-stats">—</span>
+        </div>
+      </div>
+
+      <!-- Bottom console -->
+      <div class="h-48 bg-surface-container-lowest border-t-2 border-outline-variant p-3 overflow-y-auto font-label-mono text-label-mono" id="console">
+        <div class="text-primary-fixed mb-2 flex items-center gap-2">
+          <span class="material-symbols-outlined text-sm">terminal</span>
+          WASM EXECUTION CONSOLE
+        </div>
+        <div class="console-line text-on-surface-variant opacity-60">// Awaiting Wasm modules + first operation...</div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Hidden import file input -->
+  <input type="file" id="import-file-input" accept=".las,.ply,.step,.iges,.stp,.igs" style="display:none;" />
+
+</body>
+</html>

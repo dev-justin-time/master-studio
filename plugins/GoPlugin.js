@@ -22,6 +22,48 @@ export const GoPlugin = {
 
     // Create worker pool for concurrent processing
     this._initWorkerPool();
+
+    // Register our accepted extensions + drop-zone descriptors with
+    // the host's import DOM registry (MasterApp._initImportDomHandlers
+    // installed the listeners at the top of init() so they are
+    // already up by the time we dispatch). Mirrors the pattern in
+    // plugins/ModelImportPlugin.js — each plugin owns its own format
+    // list so the host UI composes dynamically. Adding a new Wasm
+    // format (e.g. .xyz for academic LiDAR) is a one-line edit here
+    // — no MasterApp / index.html change required.
+    //
+    // Idempotency: listener uses a Set for extensions + a Map keyed
+    // by `category` for zone labels, so duplicate / late-arriving
+    // dispatches are safe.
+    this._registerImportSurface();
+  },
+
+  // ── Import DOM registration (host: MasterApp._initImportDomHandlers) ──
+  //
+  // Dispatches `import:register-extension` once with all 6 Wasm
+  // formats (.las / .ply / .step / .iges / .stp / .igs) and
+  // `import:register-zone-text` twice — once per logical category
+  // (point clouds vs CAD). Each category is a separate dispatch so
+  // future plugin splits (e.g. adding a "scan" category independent
+  // of "pointclouds") require zero changes here.
+  //
+  // Wrapped in try/catch so an unusual execution context (no `window`,
+  // SSR-like env, test runner without a stub) doesn't blow up the
+  // Wasm init — the dispatch is purely a UI hint.
+  _registerImportSurface() {
+    try {
+      window.dispatchEvent(new CustomEvent('import:register-extension', {
+        detail: { extensions: ['.las', '.ply', '.step', '.iges', '.stp', '.igs'] },
+      }));
+      window.dispatchEvent(new CustomEvent('import:register-zone-text', {
+        detail: { category: 'pointclouds', label: 'point clouds' },
+      }));
+      window.dispatchEvent(new CustomEvent('import:register-zone-text', {
+        detail: { category: 'cad', label: 'CAD' },
+      }));
+    } catch (err) {
+      logger.warn('Go', 'Could not dispatch import:register-* events:', err && err.message ? err.message : err);
+    }
   },
 
   async _initWasm() {
@@ -34,6 +76,16 @@ export const GoPlugin = {
     } catch (err) {
       logger.error('Go', 'Failed to initialize Wasm bridge:', err);
     }
+  },
+
+  // ── StateManager accessor (shared with LightingPlugin's pattern) ──
+  // Used to track / release GFX resources (point cloud geometries,
+  // CAD groups) so the GfxResourcePanel + AIAgent MemoryExpert can
+  // detect accumulation beyond just water-cubemaps.
+  _getStateManager() {
+    return this._state && this._state.data && this._state.data.pluginManager
+      ? this._state.data.pluginManager._plugins && this._state.data.pluginManager._plugins.get('StateManager')
+      : null;
   },
 
   _initWorkerPool() {
@@ -88,6 +140,18 @@ export const GoPlugin = {
       points.name = 'PointCloud_' + Date.now();
       points.userData.isManagedObject = true;
 
+      // Track the point cloud geometry as a GFX resource so the
+      // GfxResourcePanel + MemoryExpert can see large imports. A
+      // typical LiDAR scan is 10-50MB; a 5M-point cloud is ~60MB.
+      const sm = this._getStateManager();
+      if (sm && typeof sm.trackGfxResource === 'function') {
+        let bytes = geometry.attributes.position.array.byteLength;
+        if (geometry.attributes.color) bytes += geometry.attributes.color.array.byteLength;
+        const id = `pointcloud/${points.uuid}`;
+        sm.trackGfxResource(id, bytes, 'pointcloud-geometry', points.name);
+        points.userData.gfxResourceId = id;
+      }
+
       return points;
     } finally {
       worker.busy = false;
@@ -134,6 +198,24 @@ export const GoPlugin = {
         mesh.userData.isManagedObject = true;
         group.add(mesh);
       });
+
+      // Track the CAD group as a GFX resource (sum of all child
+      // geometry byte lengths — position + index + normal arrays).
+      // A typical STEP file is 5-20MB; the panel + MemoryExpert can
+      // now see imports pile up.
+      const sm = this._getStateManager();
+      if (sm && typeof sm.trackGfxResource === 'function') {
+        let bytes = 0;
+        group.traverse((obj) => {
+          if (!obj.isMesh || !obj.geometry) return;
+          if (obj.geometry.attributes.position) bytes += obj.geometry.attributes.position.array.byteLength;
+          if (obj.geometry.index) bytes += obj.geometry.index.array.byteLength;
+          if (obj.geometry.attributes.normal) bytes += obj.geometry.attributes.normal.array.byteLength;
+        });
+        const id = `cad/${group.uuid}`;
+        sm.trackGfxResource(id, bytes, 'cad-geometry', group.name);
+        group.userData.gfxResourceId = id;
+      }
 
       return group;
     } finally {

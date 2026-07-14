@@ -1,8 +1,9 @@
 /**
  * scene-utils.js
  *
- * Shared brutalist-page glue for scene.html and studio.html. Every bootstrap-
- * style app glued on top of MasterApp.js needs (at minimum):
+ * Shared brutalist-page glue for every page that loads MasterApp.js
+ * (scene.html, studio.html, main.html, nodearchitect.html, index.html).
+ * Provides:
  *
  *   1. An FPS counter that ticks `#status-fps` on every animation frame.
  *   2. Status bar reflection (coords, obj count, vertex count).
@@ -13,8 +14,28 @@
  * Every operation is defensive — if the page is missing a required element
  * (e.g. a page without a Properties panel), that subsystem no-ops cleanly.
  *
- * Auto-runs on import. Pages just embed `<script type="module" src="/core/scene-utils.js">`
- * after `<script type="module" src="/MasterApp.js">`.
+ * ⚠ EXPLICIT DEPENDENCY — NOT auto-imported by MasterApp.js
+ * ──────────────────────────────────────────────────────────
+ * MasterApp.js is intentionally agnostic about scene-utils.js. Every HTML
+ * page that needs any of the four features above MUST load this module
+ * with an explicit `<script type="module" src="/core/scene-utils.js">`
+ * tag placed AFTER the `<script type="module" src="/MasterApp.js">` tag.
+ *
+ * Why explicit, not hidden?
+ *   - Vite's module graph can statically analyze the HTML script tags
+ *     and pre-fetch them via `<link rel="modulepreload">`, which would
+ *     not happen if the import were hidden inside MasterApp.js.
+ *   - Pages can grep their own HTML to know which side-effect modules
+ *     they depend on, without trawling through a 700-line MasterApp.js
+ *     looking for side-effecting imports.
+ *   - Removing scene-utils.js from a page (e.g. for a tree-shake-heavy
+ *     studio build) is a one-line HTML edit, not a JS module rewrite.
+ *   - The contract is symmetric: scene-utils.js auto-runs on import,
+ *     MasterApp does NOT import it transitively.
+ *
+ * If you add a new HTML page that uses the brutalist theme, add the
+ * script tag explicitly. Do not add a `import './scene-utils.js'` to
+ * MasterApp.js — that re-creates the hidden-dependency anti-pattern.
  *
  * Exposes `window.__masterScene` + `window.__masterCamera` for downstream
  * consumers (e.g. studio.html's dynamic outliner refresh).

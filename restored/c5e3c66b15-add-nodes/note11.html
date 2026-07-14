@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<!-- RESTORED_RUNNABLE_MARKER -->
+<script type="importmap">
+{
+  "imports": {
+    "three":         "https://unpkg.com/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>MEME STUDIO | Main Scene</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Anybody:wght@700;800;900&amp;family=Plus+Jakarta+Sans:wght@400;500&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .neon-glow {
+            text-shadow: 0 0 10px rgba(0, 255, 0, 0.7);
+        }
+        .hard-shadow {
+            box-shadow: 4px 4px 0px 0px #02e600;
+        }
+        .hard-shadow-active {
+            box-shadow: 0px 0px 0px 0px #02e600;
+            transform: translate(2px, 2px);
+        }
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #131313;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3b4b35;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #02e600;
+        }
+        @keyframes grid-pulse {
+            0% { opacity: 0.3; }
+            50% { opacity: 0.6; }
+            100% { opacity: 0.3; }
+        }
+        .grid-animate {
+            animation: grid-pulse 4s infinite ease-in-out;
+        }
+        @keyframes glitch {
+            0% { clip-path: inset(80% 0 0 0); transform: translate(-2px, -2px); }
+            10% { clip-path: inset(10% 0 80% 0); transform: translate(2px, 2px); }
+            20% { clip-path: inset(80% 0 0 0); transform: translate(-2px, -2px); }
+            30% { clip-path: inset(10% 0 80% 0); transform: translate(2px, 2px); }
+            40% { clip-path: inset(50% 0 30% 0); transform: translate(-2px, -2px); }
+            50% { clip-path: inset(80% 0 0 0); transform: translate(2px, 2px); }
+            100% { clip-path: inset(80% 0 0 0); transform: translate(-2px, -2px); }
+        }
+        .glitch-border::after {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border: 2px solid #77ff61;
+            opacity: 0.5;
+            animation: glitch 3s infinite linear alternate-reverse;
+            pointer-events: none;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface": "#131313",
+                      "secondary-fixed-dim": "#e9c400",
+                      "on-primary-container": "#027100",
+                      "on-primary": "#013a00",
+                      "tertiary": "#fff7f5",
+                      "tertiary-fixed": "#ffdbd1",
+                      "on-primary-fixed": "#002200",
+                      "primary": "#eaffde",
+                      "error-container": "#93000a",
+                      "primary-container": "#00ff00",
+                      "error": "#ffb4ab",
+                      "on-tertiary-fixed": "#3b0900",
+                      "on-secondary-fixed-variant": "#544600",
+                      "on-surface": "#e5e2e1",
+                      "surface-container": "#201f1f",
+                      "tertiary-container": "#ffd2c6",
+                      "surface-bright": "#3a3939",
+                      "on-error-container": "#ffdad6",
+                      "surface-dim": "#131313",
+                      "primary-fixed-dim": "#02e600",
+                      "secondary-container": "#ffdb3c",
+                      "on-primary-fixed-variant": "#015300",
+                      "inverse-primary": "#026e00",
+                      "surface-tint": "#02e600",
+                      "inverse-surface": "#e5e2e1",
+                      "surface-variant": "#353534",
+                      "on-tertiary": "#601400",
+                      "inverse-on-surface": "#313030",
+                      "secondary-fixed": "#ffe16d",
+                      "surface-container-high": "#2a2a2a",
+                      "on-error": "#690005",
+                      "outline": "#84967c",
+                      "surface-container-lowest": "#0e0e0e",
+                      "on-background": "#e5e2e1",
+                      "surface-container-low": "#1c1b1b",
+                      "on-tertiary-fixed-variant": "#872000",
+                      "on-surface-variant": "#b9ccaf",
+                      "on-secondary-fixed": "#221b00",
+                      "background": "#131313",
+                      "primary-fixed": "#77ff61",
+                      "surface-container-highest": "#353534",
+                      "secondary": "#fff9ef",
+                      "outline-variant": "#3b4b35",
+                      "on-secondary-container": "#725f00",
+                      "on-secondary": "#3a3000",
+                      "tertiary-fixed-dim": "#ffb5a0",
+                      "on-tertiary-container": "#b42e00"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "margin-mobile": "16px",
+                      "gutter": "16px",
+                      "unit": "4px",
+                      "margin-desktop": "32px",
+                      "container-max": "1280px"
+              },
+              "fontFamily": {
+                      "body-md": ["Plus Jakarta Sans"],
+                      "headline-xl": ["Anybody"],
+                      "headline-md": ["Anybody"],
+                      "headline-lg": ["Anybody"],
+                      "label-mono": ["Space Grotesk"],
+                      "label-bold": ["Space Grotesk"]
+              },
+              "fontSize": {
+                      "body-md": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                      "headline-xl": ["64px", {"lineHeight": "1.1", "letterSpacing": "-0.04em", "fontWeight": "900"}],
+                      "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "700"}],
+                      "headline-lg": ["40px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                      "label-mono": ["12px", {"lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                      "label-bold": ["14px", {"lineHeight": "1", "fontWeight": "700"}]
+              }
+            },
+          },
+        }
+      </script>
+</head>
+<body class="bg-surface text-on-surface selection:bg-primary-container selection:text-on-primary overflow-hidden h-screen flex flex-col">
+<!-- Modal Overlay -->
+<div class="fixed inset-0 z-[60] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+<div class="relative w-full max-w-lg bg-surface-container-lowest border-4 border-primary-fixed shadow-[12px_12px_0px_0px_#000000] glitch-border">
+<!-- Badge -->
+<div class="absolute -top-4 -left-4 bg-secondary-container text-on-secondary-container px-3 py-1 font-label-bold text-label-bold border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] uppercase">
+            ALPHA BUILD
+        </div>
+<!-- Header -->
+<div class="p-6 border-b-2 border-outline-variant flex justify-between items-start">
+<div>
+<h2 class="font-headline-md text-headline-md text-primary-fixed uppercase tracking-tighter italic">3D TEXT GENERATOR</h2>
+<p class="font-label-mono text-label-mono text-on-surface-variant opacity-60">MODULE: TYPE_GEN_V2</p>
+</div>
+<button class="text-on-surface-variant hover:text-primary-fixed transition-colors">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<!-- Body -->
+<div class="p-8 space-y-8">
+<!-- Text Input -->
+<div class="space-y-2">
+<label class="block font-label-bold text-label-bold text-on-surface-variant uppercase">TEXT CONTENT</label>
+<input class="w-full bg-surface-container-low border-2 border-outline-variant focus:border-primary-fixed text-primary-fixed font-headline-md p-4 outline-none transition-all uppercase tracking-widest" type="text" value="HODL"/>
+</div>
+<!-- Font Selection -->
+<div class="space-y-2">
+<label class="block font-label-bold text-label-bold text-on-surface-variant uppercase">FONT_FAMILY</label>
+<div class="grid grid-cols-2 gap-2">
+<button class="p-3 bg-primary-container text-on-primary border-2 border-primary-fixed font-label-mono text-label-mono text-left">SPACE_GROTESK</button>
+<button class="p-3 bg-surface-container-high text-on-surface-variant border-2 border-outline-variant font-label-mono text-label-mono text-left hover:border-primary-fixed transition-colors">ROBOTO_MONO</button>
+</div>
+</div>
+<!-- Sliders -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<div class="space-y-3">
+<div class="flex justify-between font-label-mono text-label-mono text-on-surface-variant uppercase">
+<span>SIZE</span>
+<span class="text-primary-fixed">42.0</span>
+</div>
+<input class="w-full accent-primary-fixed bg-surface h-2 appearance-none border border-outline-variant" type="range"/>
+</div>
+<div class="space-y-3">
+<div class="flex justify-between font-label-mono text-label-mono text-on-surface-variant uppercase">
+<span>DEPTH</span>
+<span class="text-primary-fixed">8.5</span>
+</div>
+<input class="w-full accent-primary-fixed bg-surface h-2 appearance-none border border-outline-variant" type="range"/>
+</div>
+</div>
+</div>
+<!-- Footer -->
+<div class="p-6 bg-surface-container-low border-t-2 border-outline-variant flex flex-col md:flex-row gap-4">
+<button class="flex-1 bg-primary-container border-2 border-on-primary-container text-on-primary font-label-bold text-label-bold py-4 shadow-[6px_6px_0px_0px_#000000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all uppercase flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">text_fields</span>
+                CREATE 3D TEXT
+            </button>
+<button class="px-8 bg-transparent border-2 border-outline text-on-surface-variant font-label-bold text-label-bold py-4 hover:bg-surface-container-highest transition-all uppercase">
+                CANCEL
+            </button>
+</div>
+</div>
+</div>
+<!-- TopNavBar -->
+<nav class="fixed top-0 w-full z-50 flex justify-between items-center px-margin-desktop h-16 bg-surface dark:bg-surface border-b-2 border-outline-variant dark:border-outline-variant shadow-[4px_4px_0px_0px_#02e600]">
+<div class="flex items-center gap-8">
+<div class="font-headline-md text-headline-md text-primary-fixed dark:text-primary-fixed uppercase tracking-tighter italic">
+                MEME STUDIO
+            </div>
+<div class="hidden md:flex gap-6 items-center">
+<a class="text-primary-fixed font-bold border-b-2 border-primary-fixed font-label-bold text-label-bold py-5" href="#">Projects</a>
+<a class="text-on-surface-variant font-medium font-label-bold text-label-bold hover:text-primary-fixed hover:bg-surface-container-highest transition-all duration-100" href="#">Assets</a>
+<a class="text-on-surface-variant font-medium font-label-bold text-label-bold hover:text-primary-fixed hover:bg-surface-container-highest transition-all duration-100" href="#">Market</a>
+<a class="text-on-surface-variant font-medium font-label-bold text-label-bold hover:text-primary-fixed hover:bg-surface-container-highest transition-all duration-100" href="#">Learn</a>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative group">
+<div class="absolute inset-y-0 left-3 flex items-center pointer-events-none text-outline">
+<span class="material-symbols-outlined text-sm">search</span>
+</div>
+<input class="bg-surface-container-lowest border-2 border-outline-variant focus:border-primary-fixed-dim text-primary-fixed font-label-mono text-label-mono py-2 pl-10 pr-4 outline-none transition-all w-64" placeholder="SEARCH ASSETS..." type="text"/>
+</div>
+<button class="bg-surface border-2 border-primary-fixed-dim text-primary-fixed px-4 py-2 font-label-bold text-label-bold shadow-[3px_3px_0px_0px_#02e600] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">
+                RENDER
+            </button>
+<button class="bg-primary-container border-2 border-on-primary-container text-on-primary font-label-bold text-label-bold px-4 py-2 shadow-[4px_4px_0px_0px_#000000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">
+                MINT NFT
+            </button>
+</div>
+</nav>
+<main class="flex flex-1 pt-16 overflow-hidden">
+<!-- SideNavBar (Left: Scene Outliner) -->
+<aside class="fixed left-0 top-16 h-[calc(100vh-64px-32px)] w-64 bg-surface-container-lowest dark:bg-surface-container-lowest border-r-2 border-outline-variant dark:border-outline-variant flex flex-col p-4 z-40">
+<div class="mb-6">
+<div class="font-label-bold text-label-bold text-secondary-fixed mb-1 uppercase">ALPHA BUILD</div>
+<div class="font-label-mono text-label-mono text-on-surface-variant opacity-60">v4.2.0-LFG</div>
+</div>
+<div class="flex flex-col gap-1 mb-8 overflow-y-auto">
+<div class="text-primary-fixed font-label-bold text-label-bold uppercase tracking-widest mb-2 flex items-center justify-between">
+                    OUTLINER
+                    <span class="material-symbols-outlined text-sm">filter_list</span>
+</div>
+<!-- Mock Objects -->
+<button class="flex items-center gap-3 p-2 bg-primary-container text-on-primary-container border-2 border-primary-fixed shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] scale-95 font-label-mono text-label-mono">
+<span class="material-symbols-outlined text-sm">view_in_ar</span>
+                    Doge_Sentinel_V1
+                </button>
+<button class="flex items-center gap-3 p-2 text-on-surface-variant hover:text-primary-fixed hover:bg-surface-container-high transition-colors font-label-mono text-label-mono">
+<span class="material-symbols-outlined text-sm">account_tree</span>
+                    Pepe_Node_Base
+                </button>
+<button class="flex items-center gap-3 p-2 text-on-surface-variant hover:text-primary-fixed hover:bg-surface-container-high transition-colors font-label-mono text-label-mono">
+<span class="material-symbols-outlined text-sm">texture</span>
+                    To_The_Moon_Skybox
+                </button>
+<button class="flex items-center gap-3 p-2 text-on-surface-variant hover:text-primary-fixed hover:bg-surface-container-high transition-colors font-label-mono text-label-mono">
+<span class="material-symbols-outlined text-sm">light_mode</span>
+                    Neon_Flood_A
+                </button>
+<button class="flex items-center gap-3 p-2 text-on-surface-variant hover:text-primary-fixed hover:bg-surface-container-high transition-colors font-label-mono text-label-mono">
+<span class="material-symbols-outlined text-sm">videocam</span>
+                    HODL_Camera_01
+                </button>
+</div>
+<div class="mt-auto pt-4 border-t-2 border-outline-variant space-y-4">
+<button class="w-full bg-secondary-container text-on-secondary-container border-2 border-black font-label-bold text-label-bold py-3 shadow-[3px_3px_0px_0px_#000] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">add_box</span>
+                    ADD NODE
+                </button>
+<div class="flex flex-col gap-2">
+<a class="flex items-center gap-2 font-label-mono text-label-mono text-on-surface-variant hover:text-primary-fixed transition-colors" href="#">
+<span class="material-symbols-outlined text-sm">help</span>
+                        Docs
+                    </a>
+<a class="flex items-center gap-2 font-label-mono text-label-mono text-on-surface-variant hover:text-primary-fixed transition-colors" href="#">
+<span class="material-symbols-outlined text-sm">forum</span>
+                        Support
+                    </a>
+</div>
+</div>
+</aside>
+<!-- Viewport Area -->
+<section class="flex-1 ml-64 mr-80 relative bg-surface overflow-hidden">
+<!-- Neon Grid Background -->
+<div class="absolute inset-0 z-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#1a2e1a] to-surface"></div>
+<div class="absolute inset-0 z-0 pointer-events-none grid-animate" style="background-image: linear-gradient(to right, #00ff001a 1px, transparent 1px), linear-gradient(to bottom, #00ff001a 1px, transparent 1px); background-size: 40px 40px; transform: perspective(1000px) rotateX(60deg) translateY(-200px); scale: 2;"></div>
+<!-- Floating Scene Label -->
+<div class="absolute top-4 left-4 z-10 px-4 py-2 bg-surface-container-highest/80 border-2 border-primary-fixed-dim text-primary-fixed font-label-mono text-label-mono backdrop-blur-md">
+                VIEWPORT: PERSPECTIVE
+            </div>
+<!-- Central 3D Placeholder Content -->
+<div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+<div class="w-96 h-96 border-4 border-primary-fixed relative shadow-[0_0_50px_rgba(2,230,0,0.3)] group">
+<div class="absolute -top-12 left-1/2 -translate-x-1/2 px-3 py-1 bg-primary-container text-on-primary-container font-label-bold text-label-bold border-2 border-black">
+                        Doge_Sentinel_V1.obj
+                    </div>
+<!-- Gizmo Mockup -->
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 pointer-events-auto cursor-move">
+<div class="absolute h-full w-1 bg-red-500 left-1/2 top-0 origin-bottom"></div>
+<div class="absolute w-full h-1 bg-blue-500 top-1/2 left-0 origin-right"></div>
+<div class="absolute h-full w-1 bg-green-500 left-1/2 top-0 rotate-45 origin-center"></div>
+</div>
+</div>
+</div>
+<!-- Floating Gizmo Toolbar -->
+<div class="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center bg-surface-container-highest border-2 border-outline-variant p-2 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] z-20">
+<button class="p-3 hover:bg-primary-container hover:text-on-primary-container transition-colors border-r-2 border-outline-variant group">
+<span class="material-symbols-outlined text-headline-md">pan_tool</span>
+<div class="absolute -top-10 left-1/2 -translate-x-1/2 bg-surface border border-primary-fixed-dim px-2 py-1 text-[10px] opacity-0 group-hover:opacity-100 font-label-mono">PAN [P]</div>
+</button>
+<button class="p-3 bg-primary-container text-on-primary-container border-r-2 border-outline-variant">
+<span class="material-symbols-outlined text-headline-md" style="font-variation-settings: 'FILL' 1;">open_with</span>
+</button>
+<button class="p-3 hover:bg-primary-container hover:text-on-primary-container transition-colors border-r-2 border-outline-variant">
+<span class="material-symbols-outlined text-headline-md">sync</span>
+</button>
+<button class="p-3 hover:bg-primary-container hover:text-on-primary-container transition-colors">
+<span class="material-symbols-outlined text-headline-md">aspect_ratio</span>
+</button>
+</div>
+</section>
+<!-- Right SideBar (Object Properties) -->
+<aside class="fixed right-0 top-16 h-[calc(100vh-64px-32px)] w-80 bg-surface-container-lowest dark:bg-surface-container-lowest border-l-2 border-outline-variant dark:border-outline-variant flex flex-col p-6 z-40 overflow-y-auto">
+<div class="mb-8">
+<div class="text-primary-fixed font-headline-md text-headline-md tracking-tighter uppercase mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">settings</span>
+                    PROPERTIES
+                </div>
+<!-- Transform Section -->
+<div class="space-y-4">
+<div class="flex items-center justify-between font-label-bold text-label-bold text-on-surface-variant uppercase border-b border-outline-variant pb-2">
+<span>Transform</span>
+<span class="material-symbols-outlined text-sm">expand_more</span>
+</div>
+<div class="space-y-3">
+<div class="grid grid-cols-[1fr_2fr] items-center">
+<span class="font-label-mono text-label-mono text-on-surface-variant">LOCATION</span>
+<div class="flex gap-2">
+<input class="w-full bg-surface border border-outline-variant font-label-mono text-label-mono p-1 text-center text-primary-fixed" type="text" value="0.00"/>
+<input class="w-full bg-surface border border-outline-variant font-label-mono text-label-mono p-1 text-center text-primary-fixed" type="text" value="1.52"/>
+<input class="w-full bg-surface border border-outline-variant font-label-mono text-label-mono p-1 text-center text-primary-fixed" type="text" value="-0.4"/>
+</div>
+</div>
+<div class="grid grid-cols-[1fr_2fr] items-center">
+<span class="font-label-mono text-label-mono text-on-surface-variant">ROTATION</span>
+<div class="flex gap-2">
+<input class="w-full bg-surface border border-outline-variant font-label-mono text-label-mono p-1 text-center text-primary-fixed" type="text" value="90°"/>
+<input class="w-full bg-surface border border-outline-variant font-label-mono text-label-mono p-1 text-center text-primary-fixed" type="text" value="0°"/>
+<input class="w-full bg-surface border border-outline-variant font-label-mono text-label-mono p-1 text-center text-primary-fixed" type="text" value="45°"/>
+</div>
+</div>
+</div>
+</div>
+<!-- Material Section -->
+<div class="mt-10 space-y-4">
+<div class="flex items-center justify-between font-label-bold text-label-bold text-on-surface-variant uppercase border-b border-outline-variant pb-2">
+<span>Materials</span>
+<button class="bg-primary-container text-on-primary-container px-2 py-0.5 text-[10px] border border-black">NEW</button>
+</div>
+<div class="p-4 bg-surface-container-high border-2 border-outline-variant flex flex-col gap-4">
+<div class="aspect-square w-full bg-surface border border-primary-fixed overflow-hidden">
+<div class="w-full h-full bg-gradient-to-br from-primary-fixed-dim to-on-primary-fixed animate-pulse"></div>
+</div>
+<div class="space-y-2">
+<label class="font-label-mono text-label-mono text-on-surface-variant block">SHADERS: TOON_SKETCH_PRO</label>
+<input class="w-full accent-primary-fixed bg-surface h-1 appearance-none" type="range"/>
+<div class="flex justify-between font-label-mono text-[10px]">
+<span>ROUGHNESS</span>
+<span class="text-primary-fixed">0.69</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Physics Section -->
+<div class="mt-10 space-y-4">
+<div class="flex items-center justify-between font-label-bold text-label-bold text-on-surface-variant uppercase border-b border-outline-variant pb-2">
+<span>Physics</span>
+<span class="material-symbols-outlined text-sm">settings_input_component</span>
+</div>
+<div class="flex items-center gap-2 p-3 bg-surface border-2 border-primary-fixed/30 hover:border-primary-fixed transition-colors">
+<div class="w-4 h-4 bg-primary-fixed shadow-[0_0_5px_#02e600]"></div>
+<span class="font-label-mono text-label-mono text-primary-fixed">ENABLE_RAGDOLL</span>
+</div>
+</div>
+</div>
+</aside>
+</main>
+<!-- Status Bar -->
+<footer class="h-8 bg-surface-container-lowest border-t-2 border-outline-variant px-margin-desktop flex items-center justify-between z-50">
+<div class="flex items-center gap-6 font-label-mono text-label-mono uppercase">
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="w-2 h-2 bg-primary-fixed rounded-full animate-ping"></span>
+                RENDER_ENGINE: <span class="text-primary-fixed">MEME-RAY v1.0</span>
+</div>
+<div class="text-on-surface-variant">
+                WORLD_COORDS: <span class="text-secondary-fixed">X:10.2 Y:0.0 Z:-4.2</span>
+</div>
+</div>
+<div class="flex items-center gap-8 font-label-mono text-label-mono">
+<div class="text-on-surface-variant">
+                OBJ: <span class="text-primary-fixed">1,024</span> / VERTS: <span class="text-primary-fixed">42,069</span>
+</div>
+<div class="flex items-center gap-2 bg-surface-container-highest px-3 py-0.5 border border-outline-variant">
+<span class="text-on-surface-variant">FPS:</span>
+<span class="text-primary-fixed font-bold neon-glow">144</span>
+</div>
+</div>
+</footer>
+<script>
+        // Micro-interactions for tool selections
+        const gizmoButtons = document.querySelectorAll('.bottom-8 button');
+        gizmoButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                gizmoButtons.forEach(b => {
+                    b.classList.remove('bg-primary-container', 'text-on-primary-container');
+                    b.classList.add('hover:bg-primary-container', 'hover:text-on-primary-container');
+                });
+                btn.classList.add('bg-primary-container', 'text-on-primary-container');
+                btn.classList.remove('hover:bg-primary-container', 'hover:text-on-primary-container');
+            });
+        });
+
+        // Simulating some UI reactivity
+        document.addEventListener('keydown', (e) => {
+            if(e.key === 'r') {
+                console.log('Rendering...');
+                const renderBtn = document.querySelector('button:contains("RENDER")');
+                if(renderBtn) renderBtn.classList.add('hard-shadow-active');
+                setTimeout(() => { if(renderBtn) renderBtn.classList.remove('hard-shadow-active'); }, 100);
+            }
+        });
+    </script>
+</body></html>
+
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>MEME STUDIO | Main Scene</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Anybody:wght@700;800;900&amp;family=Plus+Jakarta+Sans:wght@400;500&amp;family=Space+Grotesk:wght@500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .neon-glow {
+            text-shadow: 0 0 10px rgba(0, 255, 0, 0.7);
+        }
+        .hard-shadow {
+            box-shadow: 4px 4px 0px 0px #02e600;
+        }
+        .hard-shadow-active {
+            box-shadow: 0px 0px 0px 0px #02e600;
+            transform: translate(2px, 2px);
+        }
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #131313;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3b4b35;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #02e600;
+        }
+        @keyframes grid-pulse {
+            0% { opacity: 0.3; }
+            50% { opacity: 0.6; }
+            100% { opacity: 0.3; }
+        }
+        .grid-animate {
+            animation: grid-pulse 4s infinite ease-in-out;
+        }
+        @keyframes glitch {
+            0% { clip-path: inset(80% 0 0 0); transform: translate(-2px, -2px); }
+            10% { clip-path: inset(10% 0 80% 0); transform: translate(2px, 2px); }
+            20% { clip-path: inset(80% 0 0 0); transform: translate(-2px, -2px); }
+            30% { clip-path: inset(10% 0 80% 0); transform: translate(2px, 2px); }
+            40% { clip-path: inset(50% 0 30% 0); transform: translate(-2px, -2px); }
+            50% { clip-path: inset(80% 0 0 0); transform: translate(2px, 2px); }
+            100% { clip-path: inset(80% 0 0 0); transform: translate(-2px, -2px); }
+        }
+        .glitch-border::after {
+            content: '';
+            position: absolute;
+            inset: -4px;
+            border: 2px solid #77ff61;
+            opacity: 0.5;
+            animation: glitch 3s infinite linear alternate-reverse;
+            pointer-events: none;
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface": "#131313",
+                      "secondary-fixed-dim": "#e9c400",
+                      "on-primary-container": "#027100",
+                      "on-primary": "#013a00",
+                      "tertiary": "#fff7f5",
+                      "tertiary-fixed": "#ffdbd1",
+                      "on-primary-fixed": "#002200",
+                      "primary": "#eaffde",
+                      "error-container": "#93000a",
+                      "primary-container": "#00ff00",
+                      "error": "#ffb4ab",
+                      "on-tertiary-fixed": "#3b0900",
+                      "on-secondary-fixed-variant": "#544600",
+                      "on-surface": "#e5e2e1",
+                      "surface-container": "#201f1f",
+                      "tertiary-container": "#ffd2c6",
+                      "surface-bright": "#3a3939",
+                      "on-error-container": "#ffdad6",
+                      "surface-dim": "#131313",
+                      "primary-fixed-dim": "#02e600",
+                      "secondary-container": "#ffdb3c",
+                      "on-primary-fixed-variant": "#015300",
+                      "inverse-primary": "#026e00",
+                      "surface-tint": "#02e600",
+                      "inverse-surface": "#e5e2e1",
+                      "surface-variant": "#353534",
+                      "on-tertiary": "#601400",
+                      "inverse-on-surface": "#313030",
+                      "secondary-fixed": "#ffe16d",
+                      "surface-container-high": "#2a2a2a",
+                      "on-error": "#690005",
+                      "outline": "#84967c",
+                      "surface-container-lowest": "#0e0e0e",
+                      "on-background": "#e5e2e1",
+                      "surface-container-low": "#1c1b1b",
+                      "on-tertiary-fixed-variant": "#872000",
+                      "on-surface-variant": "#b9ccaf",
+                      "on-secondary-fixed": "#221b00",
+                      "background": "#131313",
+                      "primary-fixed": "#77ff61",
+                      "surface-container-highest": "#353534",
+                      "secondary": "#fff9ef",
+                      "outline-variant": "#3b4b35",
+                      "on-secondary-container": "#725f00",
+                      "on-secondary": "#3a3000",
+                      "tertiary-fixed-dim": "#ffb5a0",
+                      "on-tertiary-container": "#b42e00"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "margin-mobile": "16px",
+                      "gutter": "16px",
+                      "unit": "4px",
+                      "margin-desktop": "32px",
+                      "container-max": "1280px"
+              },
+              "fontFamily": {
+                      "body-md": ["Plus Jakarta Sans"],
+                      "headline-xl": ["Anybody"],
+                      "headline-md": ["Anybody"],
+                      "headline-lg": ["Anybody"],
+                      "label-mono": ["Space Grotesk"],
+                      "label-bold": ["Space Grotesk"]
+              },
+              "fontSize": {
+                      "body-md": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                      "headline-xl": ["64px", {"lineHeight": "1.1", "letterSpacing": "-0.04em", "fontWeight": "900"}],
+                      "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "700"}],
+                      "headline-lg": ["40px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "800"}],
+                      "label-mono": ["12px", {"lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                      "label-bold": ["14px", {"lineHeight": "1", "fontWeight": "700"}]
+              }
+            },
+          },
+        }
+      </script>
+</head>
+<body class="bg-surface text-on-surface selection:bg-primary-container selection:text-on-primary overflow-hidden h-screen flex flex-col">
+<!-- Modal Overlay -->
+<div class="fixed inset-0 z-[60] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+<div class="relative w-full max-w-lg bg-surface-container-lowest border-4 border-primary-fixed shadow-[12px_12px_0px_0px_#000000] glitch-border">
+<!-- Badge -->
+<div class="absolute -top-4 -left-4 bg-secondary-container text-on-secondary-container px-3 py-1 font-label-bold text-label-bold border-2 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] uppercase">
+            ALPHA BUILD
+        </div>
+<!-- Header -->
+<div class="p-6 border-b-2 border-outline-variant flex justify-between items-start">
+<div>
+<h2 class="font-headline-md text-headline-md text-primary-fixed uppercase tracking-tighter italic">3D TEXT GENERATOR</h2>
+<p class="font-label-mono text-label-mono text-on-surface-variant opacity-60">MODULE: TYPE_GEN_V2</p>
+</div>
+<button class="text-on-surface-variant hover:text-primary-fixed transition-colors">
+<span class="material-symbols-outlined">close</span>
+</button>
+</div>
+<!-- Body -->
+<div class="p-8 space-y-8">
+<!-- Text Input -->
+<div class="space-y-2">
+<label class="block font-label-bold text-label-bold text-on-surface-variant uppercase">TEXT CONTENT</label>
+<input class="w-full bg-surface-container-low border-2 border-outline-variant focus:border-primary-fixed text-primary-fixed font-headline-md p-4 outline-none transition-all uppercase tracking-widest" type="text" value="HODL"/>
+</div>
+<!-- Font Selection -->
+<div class="space-y-2">
+<label class="block font-label-bold text-label-bold text-on-surface-variant uppercase">FONT_FAMILY</label>
+<div class="grid grid-cols-2 gap-2">
+<button class="p-3 bg-primary-container text-on-primary border-2 border-primary-fixed font-label-mono text-label-mono text-left">SPACE_GROTESK</button>
+<button class="p-3 bg-surface-container-high text-on-surface-variant border-2 border-outline-variant font-label-mono text-label-mono text-left hover:border-primary-fixed transition-colors">ROBOTO_MONO</button>
+</div>
+</div>
+<!-- Sliders -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<div class="space-y-3">
+<div class="flex justify-between font-label-mono text-label-mono text-on-surface-variant uppercase">
+<span>SIZE</span>
+<span class="text-primary-fixed">42.0</span>
+</div>
+<input class="w-full accent-primary-fixed bg-surface h-2 appearance-none border border-outline-variant" type="range"/>
+</div>
+<div class="space-y-3">
+<div class="flex justify-between font-label-mono text-label-mono text-on-surface-variant uppercase">
+<span>DEPTH</span>
+<span class="text-primary-fixed">8.5</span>
+</div>
+<input class="w-full accent-primary-fixed bg-surface h-2 appearance-none border border-outline-variant" type="range"/>
+</div>
+</div>
+</div>
+<!-- Footer -->
+<div class="p-6 bg-surface-container-low border-t-2 border-outline-variant flex flex-col md:flex-row gap-4">
+<button class="flex-1 bg-primary-container border-2 border-on-primary-container text-on-primary font-label-bold text-label-bold py-4 shadow-[6px_6px_0px_0px_#000000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all uppercase flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">text_fields</span>
+                CREATE 3D TEXT
+            </button>
+<button class="px-8 bg-transparent border-2 border-outline text-on-surface-variant font-label-bold text-label-bold py-4 hover:bg-surface-container-highest transition-all uppercase">
+                CANCEL
+            </button>
+</div>
+</div>
+</div>
+<!-- TopNavBar -->
+<nav class="fixed top-0 w-full z-50 flex justify-between items-center px-margin-desktop h-16 bg-surface dark:bg-surface border-b-2 border-outline-variant dark:border-outline-variant shadow-[4px_4px_0px_0px_#02e600]">
+<div class="flex items-center gap-8">
+<div class="font-headline-md text-headline-md text-primary-fixed dark:text-primary-fixed uppercase tracking-tighter italic">
+                MEME STUDIO
+            </div>
+<div class="hidden md:flex gap-6 items-center">
+<a class="text-primary-fixed font-bold border-b-2 border-primary-fixed font-label-bold text-label-bold py-5" href="#">Projects</a>
+<a class="text-on-surface-variant font-medium font-label-bold text-label-bold hover:text-primary-fixed hover:bg-surface-container-highest transition-all duration-100" href="#">Assets</a>
+<a class="text-on-surface-variant font-medium font-label-bold text-label-bold hover:text-primary-fixed hover:bg-surface-container-highest transition-all duration-100" href="#">Market</a>
+<a class="text-on-surface-variant font-medium font-label-bold text-label-bold hover:text-primary-fixed hover:bg-surface-container-highest transition-all duration-100" href="#">Learn</a>
+</div>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative group">
+<div class="absolute inset-y-0 left-3 flex items-center pointer-events-none text-outline">
+<span class="material-symbols-outlined text-sm">search</span>
+</div>
+<input class="bg-surface-container-lowest border-2 border-outline-variant focus:border-primary-fixed-dim text-primary-fixed font-label-mono text-label-mono py-2 pl-10 pr-4 outline-none transition-all w-64" placeholder="SEARCH ASSETS..." type="text"/>
+</div>
+<button class="bg-surface border-2 border-primary-fixed-dim text-primary-fixed px-4 py-2 font-label-bold text-label-bold shadow-[3px_3px_0px_0px_#02e600] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">
+                RENDER
+            </button>
+<button class="bg-primary-container border-2 border-on-primary-container text-on-primary font-label-bold text-label-bold px-4 py-2 shadow-[4px_4px_0px_0px_#000000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all">
+                MINT NFT
+            </button>
+</div>
+</nav>
+<main class="flex flex-1 pt-16 overflow-hidden">
+<!-- SideNavBar (Left: Scene Outliner) -->
+<aside class="fixed left-0 top-16 h-[calc(100vh-64px-32px)] w-64 bg-surface-container-lowest dark:bg-surface-container-lowest border-r-2 border-outline-variant dark:border-outline-variant flex flex-col p-4 z-40">
+<div class="mb-6">
+<div class="font-label-bold text-label-bold text-secondary-fixed mb-1 uppercase">ALPHA BUILD</div>
+<div class="font-label-mono text-label-mono text-on-surface-variant opacity-60">v4.2.0-LFG</div>
+</div>
+<div class="flex flex-col gap-1 mb-8 overflow-y-auto">
+<div class="text-primary-fixed font-label-bold text-label-bold uppercase tracking-widest mb-2 flex items-center justify-between">
+                    OUTLINER
+                    <span class="material-symbols-outlined text-sm">filter_list</span>
+</div>
+<!-- Mock Objects -->
+<button class="flex items-center gap-3 p-2 bg-primary-container text-on-primary-container border-2 border-primary-fixed shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] scale-95 font-label-mono text-label-mono">
+<span class="material-symbols-outlined text-sm">view_in_ar</span>
+                    Doge_Sentinel_V1
+                </button>
+<button class="flex items-center gap-3 p-2 text-on-surface-variant hover:text-primary-fixed hover:bg-surface-container-high transition-colors font-label-mono text-label-mono">
+<span class="material-symbols-outlined text-sm">account_tree</span>
+                    Pepe_Node_Base
+                </button>
+<button class="flex items-center gap-3 p-2 text-on-surface-variant hover:text-primary-fixed hover:bg-surface-container-high transition-colors font-label-mono text-label-mono">
+<span class="material-symbols-outlined text-sm">texture</span>
+                    To_The_Moon_Skybox
+                </button>
+<button class="flex items-center gap-3 p-2 text-on-surface-variant hover:text-primary-fixed hover:bg-surface-container-high transition-colors font-label-mono text-label-mono">
+<span class="material-symbols-outlined text-sm">light_mode</span>
+                    Neon_Flood_A
+                </button>
+<button class="flex items-center gap-3 p-2 text-on-surface-variant hover:text-primary-fixed hover:bg-surface-container-high transition-colors font-label-mono text-label-mono">
+<span class="material-symbols-outlined text-sm">videocam</span>
+                    HODL_Camera_01
+                </button>
+</div>
+<div class="mt-auto pt-4 border-t-2 border-outline-variant space-y-4">
+<button class="w-full bg-secondary-container text-on-secondary-container border-2 border-black font-label-bold text-label-bold py-3 shadow-[3px_3px_0px_0px_#000] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all flex items-center justify-center gap-2">
+<span class="material-symbols-outlined">add_box</span>
+                    ADD NODE
+                </button>
+<div class="flex flex-col gap-2">
+<a class="flex items-center gap-2 font-label-mono text-label-mono text-on-surface-variant hover:text-primary-fixed transition-colors" href="#">
+<span class="material-symbols-outlined text-sm">help</span>
+                        Docs
+                    </a>
+<a class="flex items-center gap-2 font-label-mono text-label-mono text-on-surface-variant hover:text-primary-fixed transition-colors" href="#">
+<span class="material-symbols-outlined text-sm">forum</span>
+                        Support
+                    </a>
+</div>
+</div>
+</aside>
+<!-- Viewport Area -->
+<section class="flex-1 ml-64 mr-80 relative bg-surface overflow-hidden">
+<!-- Neon Grid Background -->
+<div class="absolute inset-0 z-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-[#1a2e1a] to-surface"></div>
+<div class="absolute inset-0 z-0 pointer-events-none grid-animate" style="background-image: linear-gradient(to right, #00ff001a 1px, transparent 1px), linear-gradient(to bottom, #00ff001a 1px, transparent 1px); background-size: 40px 40px; transform: perspective(1000px) rotateX(60deg) translateY(-200px); scale: 2;"></div>
+<!-- Floating Scene Label -->
+<div class="absolute top-4 left-4 z-10 px-4 py-2 bg-surface-container-highest/80 border-2 border-primary-fixed-dim text-primary-fixed font-label-mono text-label-mono backdrop-blur-md">
+                VIEWPORT: PERSPECTIVE
+            </div>
+<!-- Central 3D Placeholder Content -->
+<div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+<div class="w-96 h-96 border-4 border-primary-fixed relative shadow-[0_0_50px_rgba(2,230,0,0.3)] group">
+<div class="absolute -top-12 left-1/2 -translate-x-1/2 px-3 py-1 bg-primary-container text-on-primary-container font-label-bold text-label-bold border-2 border-black">
+                        Doge_Sentinel_V1.obj
+                    </div>
+<!-- Gizmo Mockup -->
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 pointer-events-auto cursor-move">
+<div class="absolute h-full w-1 bg-red-500 left-1/2 top-0 origin-bottom"></div>
+<div class="absolute w-full h-1 bg-blue-500 top-1/2 left-0 origin-right"></div>
+<div class="absolute h-full w-1 bg-green-500 left-1/2 top-0 rotate-45 origin-center"></div>
+</div>
+</div>
+</div>
+<!-- Floating Gizmo Toolbar -->
+<div class="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center bg-surface-container-highest border-2 border-outline-variant p-2 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] z-20">
+<button class="p-3 hover:bg-primary-container hover:text-on-primary-container transition-colors border-r-2 border-outline-variant group">
+<span class="material-symbols-outlined text-headline-md">pan_tool</span>
+<div class="absolute -top-10 left-1/2 -translate-x-1/2 bg-surface border border-primary-fixed-dim px-2 py-1 text-[10px] opacity-0 group-hover:opacity-100 font-label-mono">PAN [P]</div>
+</button>
+<button class="p-3 bg-primary-container text-on-primary-container border-r-2 border-outline-variant">
+<span class="material-symbols-outlined text-headline-md" style="font-variation-settings: 'FILL' 1;">open_with</span>
+</button>
+<button class="p-3 hover:bg-primary-container hover:text-on-primary-container transition-colors border-r-2 border-outline-variant">
+<span class="material-symbols-outlined text-headline-md">sync</span>
+</button>
+<button class="p-3 hover:bg-primary-container hover:text-on-primary-container transition-colors">
+<span class="material-symbols-outlined text-headline-md">aspect_ratio</span>
+</button>
+</div>
+</section>
+<!-- Right SideBar (Object Properties) -->
+<aside class="fixed right-0 top-16 h-[calc(100vh-64px-32px)] w-80 bg-surface-container-lowest dark:bg-surface-container-lowest border-l-2 border-outline-variant dark:border-outline-variant flex flex-col p-6 z-40 overflow-y-auto">
+<div class="mb-8">
+<div class="text-primary-fixed font-headline-md text-headline-md tracking-tighter uppercase mb-4 flex items-center gap-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">settings</span>
+                    PROPERTIES
+                </div>
+<!-- Transform Section -->
+<div class="space-y-4">
+<div class="flex items-center justify-between font-label-bold text-label-bold text-on-surface-variant uppercase border-b border-outline-variant pb-2">
+<span>Transform</span>
+<span class="material-symbols-outlined text-sm">expand_more</span>
+</div>
+<div class="space-y-3">
+<div class="grid grid-cols-[1fr_2fr] items-center">
+<span class="font-label-mono text-label-mono text-on-surface-variant">LOCATION</span>
+<div class="flex gap-2">
+<input class="w-full bg-surface border border-outline-variant font-label-mono text-label-mono p-1 text-center text-primary-fixed" type="text" value="0.00"/>
+<input class="w-full bg-surface border border-outline-variant font-label-mono text-label-mono p-1 text-center text-primary-fixed" type="text" value="1.52"/>
+<input class="w-full bg-surface border border-outline-variant font-label-mono text-label-mono p-1 text-center text-primary-fixed" type="text" value="-0.4"/>
+</div>
+</div>
+<div class="grid grid-cols-[1fr_2fr] items-center">
+<span class="font-label-mono text-label-mono text-on-surface-variant">ROTATION</span>
+<div class="flex gap-2">
+<input class="w-full bg-surface border border-outline-variant font-label-mono text-label-mono p-1 text-center text-primary-fixed" type="text" value="90°"/>
+<input class="w-full bg-surface border border-outline-variant font-label-mono text-label-mono p-1 text-center text-primary-fixed" type="text" value="0°"/>
+<input class="w-full bg-surface border border-outline-variant font-label-mono text-label-mono p-1 text-center text-primary-fixed" type="text" value="45°"/>
+</div>
+</div>
+</div>
+</div>
+<!-- Material Section -->
+<div class="mt-10 space-y-4">
+<div class="flex items-center justify-between font-label-bold text-label-bold text-on-surface-variant uppercase border-b border-outline-variant pb-2">
+<span>Materials</span>
+<button class="bg-primary-container text-on-primary-container px-2 py-0.5 text-[10px] border border-black">NEW</button>
+</div>
+<div class="p-4 bg-surface-container-high border-2 border-outline-variant flex flex-col gap-4">
+<div class="aspect-square w-full bg-surface border border-primary-fixed overflow-hidden">
+<div class="w-full h-full bg-gradient-to-br from-primary-fixed-dim to-on-primary-fixed animate-pulse"></div>
+</div>
+<div class="space-y-2">
+<label class="font-label-mono text-label-mono text-on-surface-variant block">SHADERS: TOON_SKETCH_PRO</label>
+<input class="w-full accent-primary-fixed bg-surface h-1 appearance-none" type="range"/>
+<div class="flex justify-between font-label-mono text-[10px]">
+<span>ROUGHNESS</span>
+<span class="text-primary-fixed">0.69</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Physics Section -->
+<div class="mt-10 space-y-4">
+<div class="flex items-center justify-between font-label-bold text-label-bold text-on-surface-variant uppercase border-b border-outline-variant pb-2">
+<span>Physics</span>
+<span class="material-symbols-outlined text-sm">settings_input_component</span>
+</div>
+<div class="flex items-center gap-2 p-3 bg-surface border-2 border-primary-fixed/30 hover:border-primary-fixed transition-colors">
+<div class="w-4 h-4 bg-primary-fixed shadow-[0_0_5px_#02e600]"></div>
+<span class="font-label-mono text-label-mono text-primary-fixed">ENABLE_RAGDOLL</span>
+</div>
+</div>
+</div>
+</aside>
+</main>
+<!-- Status Bar -->
+<footer class="h-8 bg-surface-container-lowest border-t-2 border-outline-variant px-margin-desktop flex items-center justify-between z-50">
+<div class="flex items-center gap-6 font-label-mono text-label-mono uppercase">
+<div class="flex items-center gap-2 text-on-surface-variant">
+<span class="w-2 h-2 bg-primary-fixed rounded-full animate-ping"></span>
+                RENDER_ENGINE: <span class="text-primary-fixed">MEME-RAY v1.0</span>
+</div>
+<div class="text-on-surface-variant">
+                WORLD_COORDS: <span class="text-secondary-fixed">X:10.2 Y:0.0 Z:-4.2</span>
+</div>
+</div>
+<div class="flex items-center gap-8 font-label-mono text-label-mono">
+<div class="text-on-surface-variant">
+                OBJ: <span class="text-primary-fixed">1,024</span> / VERTS: <span class="text-primary-fixed">42,069</span>
+</div>
+<div class="flex items-center gap-2 bg-surface-container-highest px-3 py-0.5 border border-outline-variant">
+<span class="text-on-surface-variant">FPS:</span>
+<span class="text-primary-fixed font-bold neon-glow">144</span>
+</div>
+</div>
+</footer>
+<script>
+        // Micro-interactions for tool selections
+        const gizmoButtons = document.querySelectorAll('.bottom-8 button');
+        gizmoButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                gizmoButtons.forEach(b => {
+                    b.classList.remove('bg-primary-container', 'text-on-primary-container');
+                    b.classList.add('hover:bg-primary-container', 'hover:text-on-primary-container');
+                });
+                btn.classList.add('bg-primary-container', 'text-on-primary-container');
+                btn.classList.remove('hover:bg-primary-container', 'hover:text-on-primary-container');
+            });
+        });
+
+        // Simulating some UI reactivity
+        document.addEventListener('keydown', (e) => {
+            if(e.key === 'r') {
+                console.log('Rendering...');
+                const renderBtn = document.querySelector('button:contains("RENDER")');
+                if(renderBtn) renderBtn.classList.add('hard-shadow-active');
+                setTimeout(() => { if(renderBtn) renderBtn.classList.remove('hard-shadow-active'); }, 100);
+            }
+        });
+    </script>
+</body></html>

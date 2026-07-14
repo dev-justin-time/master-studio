@@ -69,15 +69,18 @@ class MemoryExpert extends BaseExpert {
     this.thresholds = {
       maxMemoryMB: 500,
       lastCleanup: 0,
-      // GPU-side: number of water-cubemap resources before we start
-      // recommending cleanup. Default 4 = "you probably have an
-      // experimental lake + 3 test puddles you forgot about".
-      maxWaterCount: 4,
-      // Cooldown so we don't spam the recommendation every 2s while the
-      // user is actively creating water. 30s feels right: long enough
-      // to be quiet, short enough to fire again after a clean.
-      waterRecommendCooldownMS: 30000,
-      lastWaterRecommend: 0,
+      // Per-type GPU accumulation thresholds + cooldowns. The defaults
+      // are "you probably have a few experimental lights/imports you
+      // forgot about". 30s cooldowns match the water-cubemap pattern
+      // (long enough to be quiet while the user is actively creating,
+      // short enough to re-fire after a clean).
+      gfx: {
+        'water-cubemap':          { maxCount: 4, cooldownMS: 30000, lastRecommend: 0 },
+        'shadow-map':             { maxCount: 6, cooldownMS: 30000, lastRecommend: 0 },
+        'hdri-envmap':            { maxCount: 3, cooldownMS: 30000, lastRecommend: 0 },
+        'pointcloud-geometry':    { maxCount: 3, cooldownMS: 30000, lastRecommend: 0 },
+        'cad-geometry':           { maxCount: 3, cooldownMS: 30000, lastRecommend: 0 },
+      },
     };
   }
 
@@ -97,56 +100,90 @@ class MemoryExpert extends BaseExpert {
       }
     }
 
-    // 2) GPU-side water accumulation. Tally allocations minus releases
-    // from the `performance.gfxDelta` telemetry stream. We don't
-    // snapshot the StateManager's Map directly because the expert
-    // signature is `(telemetry) => recommendations`; the telemetry
-    // stream is the single source of truth, and a tally across the
-    // visible window is the most accurate read of "current live
-    // water count" we can derive without an extra cross-plugin call.
-    const gfxDeltas = telemetry.filter(
-      (t) => t.path === 'performance.gfxDelta' && t.value && t.value.type === 'water-cubemap'
-    );
-    if (gfxDeltas.length > 0) {
-      let currentCount = 0;
-      let currentBytes = 0;
-      for (const d of gfxDeltas) {
-        // Only `allocate` and `release` change the count; `update`
-        // (re-registration with new bytes for an existing id) leaves
-        // the count alone and is reflected in the running waterBytes.
-        if (d.value.event === 'allocate') currentCount += 1;
-        if (d.value.event === 'release')  currentCount -= 1;
-      }
-      // The last gfxDelta event in the buffer carries the running
-      // totals (waterCount / waterBytes) which are authoritative.
-      // Use them instead of the tally if available — it handles the
-      // case where telemetry was truncated by the 500-entry ring buffer.
-      const lastWaterDelta = [...gfxDeltas].reverse().find(
-        (d) => typeof d.value.waterCount === 'number' && typeof d.value.waterBytes === 'number'
-      );
-      if (lastWaterDelta) {
-        currentCount = lastWaterDelta.value.waterCount;
-        currentBytes = lastWaterDelta.value.waterBytes;
-      }
-
-      if (
-        currentCount >= this.thresholds.maxWaterCount &&
-        Date.now() - this.thresholds.lastWaterRecommend > this.thresholds.waterRecommendCooldownMS
-      ) {
-        const mb = currentBytes / (1024 * 1024);
-        recommendations.push({
-          reason: `${currentCount} water surfaces active (~${mb.toFixed(1)}MB GPU). Consider deleting unused water surfaces to free cubemap render targets.`,
-          action: {
-            type: 'WATER/RECOMMEND_CLEANUP',
-            payload: { count: currentCount, bytes: currentBytes, mb },
-            path: 'water.recommendCleanup',
-          },
-        });
-        this.thresholds.lastWaterRecommend = Date.now();
+    // 2) GPU-side accumulation across 5 resource types. We process
+    // each type independently (per-type thresholds + cooldowns) so
+    // one busy type doesn't suppress recommendations for the others.
+    // The dispatch path follows the type's domain (e.g. `shadows.
+    // recommendCleanup`, `hdri.recommendCleanup`) which mirrors the
+    // existing `water.recommendCleanup` contract — the GfxResourcePanel
+    // subscribes to each path independently.
+    for (const [type, cfg] of Object.entries(this.thresholds.gfx)) {
+      const rec = this._analyzeGfxType(telemetry, type, cfg);
+      if (rec) {
+        recommendations.push(rec);
+        cfg.lastRecommend = Date.now();
       }
     }
 
     return recommendations;
+  }
+
+  /**
+   * Per-type GFX accumulation check. Walks the telemetry stream to
+   * rebuild a `Map<resourceId, bytes>` for the type, sums current
+   * live count + bytes, and emits a recommendation if the count
+   * exceeds the configured threshold AND the cooldown has elapsed.
+   *
+   * Why rebuild the Map every cycle instead of trusting a running
+   * total? The StateManager only maintains running totals for
+   * `waterCount` / `waterBytes` (the first tracked type). For the
+   * other 4 types we have to tally from the 500-entry telemetry
+   * buffer, which is the single source of truth and works regardless
+   * of whether telemetry was truncated.
+   *
+   * @param {Array} telemetry     - the AIAgent telemetry buffer
+   * @param {string} type         - the gfxDelta.type to tally
+   * @param {{maxCount: number, cooldownMS: number, lastRecommend: number}} cfg
+   * @returns {object|null}       - recommendation or null
+   */
+  _analyzeGfxType(telemetry, type, cfg) {
+    const deltas = telemetry.filter(
+      (t) => t.path === 'performance.gfxDelta' && t.value && t.value.type === type
+    );
+    if (deltas.length === 0) return null;
+
+    // Walk the buffer in chronological order, building the live-set.
+    // `allocate` adds, `update` replaces bytes, `release` removes.
+    const byId = new Map();
+    for (const d of deltas) {
+      const { event, resourceId, bytes } = d.value;
+      if (event === 'allocate') byId.set(resourceId, typeof bytes === 'number' ? bytes : 0);
+      else if (event === 'update') {
+        if (byId.has(resourceId)) byId.set(resourceId, typeof bytes === 'number' ? bytes : byId.get(resourceId));
+      } else if (event === 'release') {
+        byId.delete(resourceId);
+      }
+    }
+
+    const currentCount = byId.size;
+    if (currentCount < cfg.maxCount) return null;
+    if (Date.now() - cfg.lastRecommend < cfg.cooldownMS) return null;
+
+    const currentBytes = Array.from(byId.values()).reduce((a, b) => a + b, 0);
+    const mb = currentBytes / (1024 * 1024);
+
+    // Map each type to a human-readable noun + dispatch path. The
+    // path mirrors the type's domain so subscribers (GfxResourcePanel)
+    // can filter naturally (`shadows.recommendCleanup`,
+    // `pointclouds.recommendCleanup`, etc.).
+    const META = {
+      'water-cubemap':       { noun: 'water surfaces',    type: 'WATER/RECOMMEND_CLEANUP',      path: 'water.recommendCleanup' },
+      'shadow-map':          { noun: 'shadow maps',       type: 'SHADOW/RECOMMEND_CLEANUP',     path: 'shadows.recommendCleanup' },
+      'hdri-envmap':         { noun: 'HDRI env maps',     type: 'HDRI/RECOMMEND_CLEANUP',       path: 'hdri.recommendCleanup' },
+      'pointcloud-geometry': { noun: 'point cloud meshes', type: 'POINTCLOUD/RECOMMEND_CLEANUP', path: 'pointclouds.recommendCleanup' },
+      'cad-geometry':        { noun: 'CAD models',        type: 'CAD/RECOMMEND_CLEANUP',        path: 'cad.recommendCleanup' },
+    };
+    const meta = META[type];
+    if (!meta) return null;
+
+    return {
+      reason: `${currentCount} ${meta.noun} active (~${mb.toFixed(1)}MB GPU). Consider deleting unused ${meta.noun} to free GPU memory.`,
+      action: {
+        type: meta.type,
+        payload: { count: currentCount, bytes: currentBytes, mb },
+        path: meta.path,
+      },
+    };
   }
 }
 
@@ -279,6 +316,18 @@ export const AIAgentPlugin = {
                 message: `[${domain}] ${rec.reason}`,
                 type: 'info',
               });
+            }
+            // Wire WATER/RECOMMEND_CLEANUP to actual disposal via a
+            // window event. WaterPlugin listens for `water:cleanup`
+            // and runs `_autoCleanupWaters` (off-camera + budget),
+            // which makes the AI's recommendation an action instead
+            // of just a toast. Other GFX types (shadows, HDRIs,
+            // point clouds, CAD) don't have a dedicated auto-cleanup
+            // yet; their recommendations stay informational.
+            if (rec.action && rec.action.type === 'WATER/RECOMMEND_CLEANUP') {
+              window.dispatchEvent(new CustomEvent('water:cleanup', {
+                detail: rec.action.payload || {},
+              }));
             }
           });
         }

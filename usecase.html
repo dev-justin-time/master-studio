@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Master Studio | Wasm Use Cases</title>
+
+  <!-- Brutalist typography -->
+  <link href="https://fonts.googleapis.com/css2?family=Anybody:wght@700;800;900&family=Plus+Jakarta+Sans:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+
+  <!-- Shared brutalist skin (palette + .bs-* components) -->
+  <link rel="stylesheet" href="/core/brutalist.css" />
+</head>
+<body class="bs-body-shell">
+
+  <!-- ── Wasm load status (displayed at the right end of the shared top nav).
+       Positioned absolutely so this content layer doesn't compete with
+       core/nav.js's injected bar; the shared nav already reads individual
+       status text/dot DOM elements if present (handled by /usecase.js). -->
+
+  <main class="bs-page">
+
+    <!-- LEFT SIDEBAR — 6-tUse-case tab list + active UC control panel -->
+    <aside class="bs-aside bs-aside--left" style="--aside-w: 320px;">
+      <div class="bs-tab-header">
+        <span class="material-symbols-outlined" style="font-size: 14px;">memory</span>
+        6 WASM OPERATIONS
+      </div>
+
+      <div class="bs-tab-list" id="uc-tab-list">
+        <button class="bs-tab is-active" data-uc="csg">
+          <span class="material-symbols-outlined">join</span><span>1. CSG BOOLEAN</span>
+        </button>
+        <button class="bs-tab" data-uc="decimate">
+          <span class="material-symbols-outlined">compress</span><span>2. DECIMATE MESH</span>
+        </button>
+        <button class="bs-tab" data-uc="bvh">
+          <span class="material-symbols-outlined">select_all</span><span>3. BVH BOUNDS</span>
+        </button>
+        <button class="bs-tab" data-uc="physics">
+          <span class="material-symbols-outlined">bolt</span><span>4. PHYSICS STEP</span>
+        </button>
+        <button class="bs-tab" data-uc="pointcloud">
+          <span class="material-symbols-outlined">cloud</span><span>5. POINT CLOUD</span>
+        </button>
+        <button class="bs-tab" data-uc="cad">
+          <span class="material-symbols-outlined">architecture</span><span>6. CAD IMPORT</span>
+        </button>
+      </div>
+
+      <!-- Active UC control panel — only ONE is .is-active at a time -->
+      <div style="flex: 1; overflow-y: auto; padding: 16px;">
+        <div class="bs-uc-panel is-active" data-uc="csg">
+          <h2>CSG BOOLEAN</h2>
+          <p>Cuts/merges two meshes using Rust Wasm. Spawns a red sphere and green box that intersect.</p>
+          <label class="bs-label" style="margin: 0 0 4px 0;">OPERATION</label>
+          <select id="csg-op" class="bs-select">
+            <option value="union">UNION</option>
+            <option value="subtract">SUBTRACT</option>
+            <option value="intersect">INTERSECT</option>
+          </select>
+          <button id="csg-run" class="bs-cta-primary bs-cta-full" style="margin-top: 16px;">▶ RUN CSG (RUST WASM)</button>
+          <div class="bs-card" style="margin-top: 16px;">
+            <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; color: var(--on-surface-variant); opacity: 0.7; text-transform: uppercase; letter-spacing: 0.05em;">WHAT THIS DOES</div>
+            <div id="csg-desc" style="font-family: 'Space Grotesk', monospace; font-size: 12px; color: var(--primary-neon); margin-top: 4px;">Sends both meshes' position/index arrays to <code>compute_boolean</code> in Rust Wasm. The returned Float32Array + Uint32Array is wrapped in a new BufferGeometry.</div>
+          </div>
+        </div>
+
+        <div class="bs-uc-panel" data-uc="decimate">
+          <h2>DECIMATE MESH</h2>
+          <p>Reduces a high-poly torus knot to a target triangle percentage. Watch the wireframe density drop.</p>
+          <label class="bs-label" style="margin: 0 0 4px 0;">TARGET %: <span id="decimate-pct-readout" class="bs-uc-readout">50%</span></label>
+          <input type="range" id="decimate-pct" class="bs-range" min="10" max="100" value="50" step="5"/>
+          <div style="display: flex; justify-content: space-between; font-family: 'Space Grotesk', monospace; font-size: 10px; color: var(--on-surface-variant); opacity: 0.6; margin-top: 4px;"><span>10%</span><span>100%</span></div>
+          <button id="decimate-run" class="bs-cta-primary bs-cta-full" style="margin-top: 16px;">▶ RUN DECIMATE (RUST WASM)</button>
+          <div class="bs-card" style="margin-top: 16px;">
+            <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; color: var(--on-surface-variant); opacity: 0.7; text-transform: uppercase; letter-spacing: 0.05em;">WHAT THIS DOES</div>
+            <div style="font-family: 'Space Grotesk', monospace; font-size: 12px; color: var(--primary-neon); margin-top: 4px;">Calls <code>decimate_mesh(positions, indices, percent)</code> which keeps every Nth triangle, then rebuilds a compact vertex buffer. Result re-attached as a wireframe mesh so you can see the reduced edge count.</div>
+          </div>
+        </div>
+
+        <div class="bs-uc-panel" data-uc="bvh">
+          <h2>BVH BOUNDS</h2>
+          <p>Computes the AABB of a mesh via Rust Wasm. The result is rendered as a neon-green wireframe around the source mesh.</p>
+          <button id="bvh-run" class="bs-cta-primary bs-cta-full" style="margin-top: 16px;">▶ COMPUTE BOUNDS (RUST WASM)</button>
+          <div class="bs-card" style="margin-top: 16px;">
+            <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; color: var(--on-surface-variant); opacity: 0.7; text-transform: uppercase; letter-spacing: 0.05em;">WHAT THIS DOES</div>
+            <div style="font-family: 'Space Grotesk', monospace; font-size: 12px; color: var(--primary-neon); margin-top: 4px;">Calls <code>generate_bvh(positions, indices)</code> which streams all positions through <code>chunks_exact(3)</code> to find the min/max in each axis. The returned AABB is drawn as a <code>THREE.Box3Helper</code>.</div>
+          </div>
+        </div>
+
+        <div class="bs-uc-panel" data-uc="physics">
+          <h2>PHYSICS STEP</h2>
+          <p>Runs a semi-implicit Euler integration with gravity + ground collision in Rust Wasm. 50 colored cubes drop in real time.</p>
+          <label class="bs-label" style="margin: 0 0 4px 0;">CUBE COUNT: <span id="physics-count-readout" class="bs-uc-readout">50</span></label>
+          <input type="range" id="physics-count" class="bs-range" min="10" max="200" value="50" step="10"/>
+          <div style="display: flex; gap: 8px; margin-top: 16px;">
+            <button id="physics-run" class="bs-cta-primary" style="flex: 1;">▶ START</button>
+            <button id="physics-reset" class="bs-cta-secondary" style="flex: 1;">↺ RESET</button>
+          </div>
+          <div class="bs-card" style="margin-top: 16px;">
+            <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; color: var(--on-surface-variant); opacity: 0.7; text-transform: uppercase; letter-spacing: 0.05em;">WHAT THIS DOES</div>
+            <div style="font-family: 'Space Grotesk', monospace; font-size: 12px; color: var(--primary-neon); margin-top: 4px;">Each frame, packs all bodies into a JS array, sends to <code>step_physics</code>, applies gravity <code>v.y -= 9.81 * dt</code>, integrates position, and clamps to the ground plane. Result is split back to per-cube <code>position/velocity</code>.</div>
+          </div>
+        </div>
+
+        <div class="bs-uc-panel" data-uc="pointcloud">
+          <h2>POINT CLOUD</h2>
+          <p>Parses a binary XYZ buffer via Go Wasm. We generate 5,000 random points in JS, hand the bytes to Go, and Go returns the parsed positions as a Float32Array.</p>
+          <label class="bs-label" style="margin: 0 0 4px 0;">POINT COUNT: <span id="pc-count-readout" class="bs-uc-readout">5000</span></label>
+          <input type="range" id="pc-count" class="bs-range" min="100" max="50000" value="5000" step="100"/>
+          <button id="pc-run" class="bs-cta-primary bs-cta-full" style="margin-top: 16px;">▶ PARSE (GO WASM)</button>
+          <div class="bs-card" style="margin-top: 16px;">
+            <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; color: var(--on-surface-variant); opacity: 0.7; text-transform: uppercase; letter-spacing: 0.05em;">WHAT THIS DOES</div>
+            <div style="font-family: 'Space Grotesk', monospace; font-size: 12px; color: var(--primary-neon); margin-top: 4px;">JS builds a packed binary buffer (3 little-endian float32s per point). Go's <code>parsePointCloud</code> copies bytes with <code>js.CopyBytesToGo</code>, decodes with <code>binary.LittleEndian.Uint32 + math.Float32frombits</code>, and returns positions/colors as Float32Arrays. Rendered as <code>THREE.Points</code>.</div>
+          </div>
+        </div>
+
+        <div class="bs-uc-panel" data-uc="cad">
+          <h2>CAD IMPORT</h2>
+          <p>Routes a CAD-shaped buffer through Go Wasm's <code>importCAD</code>. The placeholder parser returns a single cube mesh — enough to verify the bridge works end-to-end.</p>
+          <button id="cad-run" class="bs-cta-primary bs-cta-full" style="margin-top: 16px;">▶ IMPORT (GO WASM)</button>
+          <div class="bs-card" style="margin-top: 16px;">
+            <div style="font-family: 'Space Grotesk', monospace; font-size: 10px; color: var(--on-surface-variant); opacity: 0.7; text-transform: uppercase; letter-spacing: 0.05em;">WHAT THIS DOES</div>
+            <div style="font-family: 'Space Grotesk', monospace; font-size: 12px; color: var(--primary-neon); margin-top: 4px;">Builds a mock STEP-shaped binary buffer in JS, hands it to <code>importCAD</code>, Go returns <code>{meshes: [{positions, indices}]}</code>. We rebuild each mesh with a distinct face color and group them as a <code>THREE.Group</code>.</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- RIGHT MAIN: viewport on top + bottom console -->
+    <section class="bs-viewport" style="flex: 1;">
+      <div class="bs-radial-bg"></div>
+      <div class="bs-viewport-label">VIEWPORT: <span id="uc-name">CSG BOOLEAN</span></div>
+
+      <canvas id="renderCanvas"></canvas>
+
+      <div class="bs-viewport-stat">SCENE: <span class="bs-stat-value" id="scene-stats">—</span></div>
+
+      <div class="bs-console" id="console" style="position: absolute; bottom: 0; left: 0; right: 0; z-index: 5;">
+        <div class="bs-console__header">
+          <span class="material-symbols-outlined" style="font-size: 14px;">terminal</span>
+          WASM EXECUTION CONSOLE
+        </div>
+        <div class="bs-console__line" style="opacity: 0.6;">// Awaiting Wasm modules + first operation...</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Hidden file input (kept for parity with sibling pages — MasterApp handles) -->
+  <input type="file" id="import-file-input" accept=".las,.ply,.step,.iges,.stp,.igs" style="display:none;" />
+
+  <!-- MasterApp boots Three.js; usecase.js owns the tab/UC wiring -->
+  <script type="module" src="/MasterApp.js"></script>
+  <script type="module" src="/core/scene-utils.js"></script>
+  <script type="module" src="/core/nav.js"></script>
+  <script type="module" src="/usecase.js"></script>
+
+</body>
+</html>

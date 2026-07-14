@@ -23,14 +23,24 @@ import { SelectionPlugin } from './plugins/SelectionPlugin.js';
 import { StateManagerPlugin } from './plugins/StateManagerPlugin.js';
 import { AIAgentPlugin } from './plugins/AIAgentPlugin.js';
 import { MenuSystemPlugin } from './plugins/MenuSystemPlugin.js';
-import { LightingCameraPlugin } from './plugins/LightingCameraPlugin.js';
 import { LightingPlugin } from './plugins/LightingPlugin.js';
+import { LidarIOSPlugin } from './plugins/LidarIOSPlugin.js';
+import { PointCloudPlugin } from './plugins/PointCloudPlugin.js';
 import { PhotorealisticRenderPlugin } from './plugins/PhotorealisticRenderPlugin.js';
 import { TransformGizmoPlugin } from './plugins/TransformGizmoPlugin.js';
 import { RustPlugin } from './plugins/RustPlugin.js';
 import { GoPlugin } from './plugins/GoPlugin.js';
 import { LuaPlugin } from './plugins/LuaPlugin.js';
 import { WaterPlugin } from './plugins/WaterPlugin.js';
+import { WaterDebugOverlay } from './plugins/WaterDebugOverlay.js';
+import { GfxResourcePanel } from './plugins/GfxResourcePanel.js';
+import { MoCapPlugin } from './plugins/MoCapPlugin.js';
+import { AtmospherePlugin } from './plugins/AtmospherePlugin.js';
+import { SceneComposerPlugin } from './plugins/SceneComposerPlugin.js';
+import { PerfStatsPlugin } from './plugins/PerfStatsPlugin.js';
+import { UndoManager } from './core/UndoManager.js';
+import { SceneIO } from './core/SceneIO.js';
+import { ModelImportPlugin, SUPPORTED_EXTS } from './plugins/ModelImportPlugin.js';
 import { logger } from './core/Logger.js';
 
 export class MasterApp {
@@ -56,6 +66,15 @@ export class MasterApp {
     this._physicsDebug = false;
     this._debugGroup = null;
 
+    // Background-work scheduler. The debug panel update moved out of the
+    // rAF loop onto a setInterval(1000ms) so a 1Hz DOM-text writes can't
+    // compete with the render loop. Cleared on beforeunload via
+    // _stopRenderLoop().
+    this._debugPanelInterval = null;
+    // Set to true by _stopRenderLoop to break the rAF re-arming chain on
+    // hot-reload / page tear-down. _animate checks this at the top.
+    this._stopped = false;
+
     // 3. State Initialization
     this.state.set('scene', this.scene);
     this.state.set('camera', this.camera);
@@ -64,6 +83,16 @@ export class MasterApp {
   }
 
   async init() {
+    // Install import-DOM listeners FIRST. Plugins dispatch
+    // `import:register-extension` / `import:register-zone-text` on
+    // their own `init()` to grow the file-input accept list and the
+    // drop-zone overlay label; if we install the handlers AFTER plugin
+    // registration, those early dispatches are missed. The file-input
+    // change + drag-drop wiring still happens later in
+    // `_initImportHandlers()`; this method only registers the
+    // extension/label registration listeners.
+    this._initImportDomHandlers();
+
     this._initRenderer();
     this._initLights();
     this._initPostProcessing();
@@ -120,10 +149,10 @@ export class MasterApp {
     });
 
     this.plugins.register(MenuSystemPlugin);
-    this.plugins.register(LightingCameraPlugin);
     this.plugins.register(TransformGizmoPlugin);
 
     this.plugins.register(RiggingPlugin);
+    this.plugins.register(MoCapPlugin); // Motion capture (registered after Rigging so retargeter can bind to skeletons)
     this.plugins.register(AnimationPlugin);
     this.plugins.register(PhysicsPlugin);
     this.plugins.register(ProceduralPlugin);
@@ -132,6 +161,8 @@ export class MasterApp {
     this.plugins.register(SelectionPlugin);
 
     this.plugins.register(LightingPlugin);
+    this.plugins.register(LidarIOSPlugin);
+    this.plugins.register(PointCloudPlugin);
     this.plugins.register(PhotorealisticRenderPlugin);
 
     // Register language/Wasm plugins
@@ -139,8 +170,43 @@ export class MasterApp {
     this.plugins.register(GoPlugin);
     this.plugins.register(LuaPlugin);
 
+    // Register Atmosphere AFTER PhotorealisticRender so the god-rays
+    // pass can be injected into the renderer's EffectComposer. Also
+    // applies the default THREE.FogExp2 to the scene.
+    this.plugins.register(AtmospherePlugin);
+
     // Register Water (shader surface + foam + edge fade + cube-camera reflections)
     this.plugins.register(WaterPlugin);
+    // Register the primitive cube-camera debug overlay (Properties panel
+    // mini-viewport). Reads the +Y face of the selected water's cubemap
+    // RTT every ~33ms. No-op on pages that don't include the
+    // #water-debug-container mount.
+    this.plugins.register(WaterDebugOverlay);
+
+    // Register the new ability: AI Scene Composer (template-based +
+    // optional LLM). Composes 30+ object scenes from a text prompt.
+    // Also register the lightweight non-breaking additions shipped
+    // alongside it: UndoManager (Cmd+Z over the StateManager history),
+    // SceneIO (JSON save/load + localStorage autosave), and
+    // PerfStats (FPS/draw-calls overlay).
+    this.plugins.register(SceneComposerPlugin);
+    this.plugins.register(PerfStatsPlugin);
+    // UndoManager + SceneIO expose the plugin-shaped object pattern so
+    // the PluginManager can call update(); their real work happens in
+    // init() and via window events.
+    this.plugins.register(UndoManager);
+    this.plugins.register(SceneIO);
+    // Register the model import plugin (GLB/GLTF/OBJ/STL/FBX). Routes
+    // are wired in `_importFile` (file input + drag-drop) and the node
+    // card is auto-discovered from the `Model/ImportModelNode` entry
+    // in `nodes`. Purely additive — does not touch the GoPlugin route.
+    this.plugins.register(ModelImportPlugin);
+
+    // Register the live GFX resource table (Properties panel section).
+    // Subscribes to `performance.gfxDelta` for per-resource updates and
+    // `water.recommendCleanup` for the AI MemoryExpert's cleanup banner.
+    // No-op on pages that don't include #gfx-resource-panel-container.
+    this.plugins.register(GfxResourcePanel);
 
     // Setup TransformControls now that renderer/camera exist
     const gizmo = this.plugins._plugins.get('TransformGizmo');
@@ -183,14 +249,40 @@ export class MasterApp {
     // Wire menu events for selection operations to the Selection plugin
     this._wireMenuEvents();
 
+    // Wire history / file-action buttons (Undo, Redo, Save, Load, Clear)
+    this._wireHistoryActions();
+
     // Wire file import (point cloud / CAD) via Go Wasm
     this._initImportHandlers();
 
     // Initialize Wasm Modules (Rust/Go/Lua)
     await this._initWasmModules();
 
+    // Bind Cmd+Z / Cmd+Shift+Z on the UndoManager (it doesn't
+    // auto-bind because the host decides when to install global
+    // key listeners). Also try to restore the last autosave from
+    // localStorage (SceneIO) so the user picks up where they left
+    // off. Mount the UndoManager's UI panel if the page has the
+    // #undo-history-container mount point. All three are
+    // non-breaking — if the plugins are missing or the mount
+    // points / autosave are empty, nothing happens.
+    this.plugins._plugins.get('UndoManager')?.bindKeyboard?.();
+    this.plugins._plugins.get('UndoManager')?.renderToDOM?.(document.getElementById('undo-history-container'));
+    this.plugins._plugins.get('SceneIO')?.restoreAutosave?.(this.state);
+
+    // Start background work (low-rate, non-render-loop work).
+    // Currently: the 1Hz StateManager debug-panel DOM update. The
+    // cube overlay (WaterDebugOverlay.update via plugins.update)
+    // INTENTIONALLY stays in rAF — see the note inside _animate().
+    this._setupBackgroundWork();
+
     // Start Render Loop
     this._animate();
+
+    // Clean up background-work timers + rAF chain on page tear-down.
+    // Hot reload / SPA route changes re-instantiate MasterApp and
+    // would otherwise leak duplicate rAF + setInterval chains.
+    window.addEventListener('beforeunload', () => this._stopRenderLoop());
 
     logger.log('MasterApp', 'Initialized successfully.');
   }
@@ -738,6 +830,123 @@ export class MasterApp {
   }
 
   // ── File Import (Point Cloud / CAD via Go Wasm) ──
+  // ── Import DOM Registry (event-driven accept list + drop-zone label) ──
+  //
+  // Plugins that load model/asset formats push their accepted
+  // extensions and a drop-zone descriptor into the host's DOM by
+  // dispatching either `import:register-extension` (detail: { extensions })
+  // or `import:register-zone-text` (detail: { category, label }). The
+  // listener maintains a deduplicated registry and re-renders the
+  // affected DOM elements on every update.
+  //
+  // Order matters: this method is called as the FIRST line of
+  // `init()` so plugins dispatching from their own `init()` are caught.
+  _initImportDomHandlers() {
+    // Internal registry. `extensions` dedupes by extension token
+    // (`.glb`, `.gltf`, …); `zoneLabels` dedupes by category so a
+    // plugin can re-register with a new label without leaving the
+    // old one around. Both swallow duplicate dispatches silently.
+    const _registry = {
+      extensions: new Set(),
+      zoneLabels: new Map(),
+    };
+
+    // Snapshot the baselines ONCE on first call so repeated reads
+    // don't compound. Without this, a hypothetical second call to
+    // init() (or any path that re-runs this method on the same
+    // MasterApp instance) would re-read the LIVE accept attribute
+    // — which by then already contains extensions merged in by the
+    // first run — and bake them into the baseline. The result would
+    // be unbounded growth. Snapshotting on `this` makes the value
+    // survive across method calls on the same instance.
+    //
+    // Both baselines live on `this` (not one on DOM dataset, one on
+    // JS) so they're symmetric + discoverable from devtools. The
+    // empty-array edge case is handled correctly: `![]` is false,
+    // so the snapshot block only runs on the first call.
+    if (this._importBaselineAccept === undefined) {
+      const input = document.getElementById('import-file-input');
+      this._importBaselineAccept = input
+        ? (input.getAttribute('accept') || '').split(',').map((s) => s.trim()).filter(Boolean)
+        : [];
+    }
+    if (this._importBaselineZoneText === undefined) {
+      const el = document.getElementById('drop-zone-text');
+      this._importBaselineZoneText = el ? (el.textContent || 'Drop files here') : 'Drop files here';
+    }
+    const baselineAccept = () => this._importBaselineAccept;
+    const baselineZoneText = () => this._importBaselineZoneText;
+
+    // Update #import-file-input.accept. Always re-displays the merged
+    // list so a plugin that re-registers still reflects the latest set.
+    const updateAccept = () => {
+      const input = document.getElementById('import-file-input');
+      if (!input) return;
+      const baseline = baselineAccept();
+      const merged = [...new Set([...baseline, ..._registry.extensions])];
+      input.setAttribute('accept', merged.join(','));
+    };
+
+    // Update #drop-zone-text. Uses an Oxford-style join with "or" before
+    // the final label (e.g. "Drop point cloud, CAD, or 3D models here").
+    // Falls back to the baseline text if no labels are registered, so
+    // the UI degrades gracefully when the registration pattern isn't used.
+    const updateZoneText = () => {
+      const el = document.getElementById('drop-zone-text');
+      if (!el) return;
+      if (_registry.zoneLabels.size === 0) {
+        el.textContent = baselineZoneText();
+        return;
+      }
+      const labels = [..._registry.zoneLabels.values()];
+      let text;
+      if (labels.length === 1) {
+        text = `Drop ${labels[0]} here`;
+      } else if (labels.length === 2) {
+        text = `Drop ${labels[0]} or ${labels[1]} here`;
+      } else {
+        const head = labels.slice(0, -1).join(', ');
+        const tail = labels[labels.length - 1];
+        text = `Drop ${head}, or ${tail} here`;
+      }
+      el.textContent = text;
+    };
+
+    window.addEventListener('import:register-extension', (e) => {
+      const list = (e && e.detail && e.detail.extensions) || [];
+      if (!Array.isArray(list)) {
+        logger.warn('MasterApp', 'import:register-extension: detail.extensions must be an array');
+        return;
+      }
+      list.forEach((raw) => {
+        if (typeof raw !== 'string') return;
+        const trimmed = raw.trim();
+        if (!trimmed) return;
+        // Normalize: accept "glb" / ".glb" / "GLB" → ".glb".
+        const lower = trimmed.toLowerCase();
+        _registry.extensions.add(lower.startsWith('.') ? lower : `.${lower}`);
+      });
+      updateAccept();
+    });
+
+    window.addEventListener('import:register-zone-text', (e) => {
+      const { category, label } = (e && e.detail) || {};
+      if (!category || typeof label !== 'string' || !label.trim()) {
+        logger.warn('MasterApp', 'import:register-zone-text: detail needs { category, label:string }');
+        return;
+      }
+      _registry.zoneLabels.set(category, label);
+      updateZoneText();
+    });
+
+    // Initialize the baseline caches so the first fall-through renders
+    // match the original markup. Cheap and idempotent.
+    baselineAccept();
+    baselineZoneText();
+
+    logger.log('MasterApp', 'Import DOM registry wired (extension + zone-text listeners).');
+  }
+
   _initImportHandlers() {
     const importInput = document.getElementById('import-file-input');
     const dropZone = document.getElementById('drop-zone');
@@ -753,6 +962,54 @@ export class MasterApp {
       const file = e.target.files?.[0];
       if (file) this._importFile(file);
       importInput.value = ''; // reset so the same file can be re-selected
+    });
+
+    // ── Dedicated 3D-model button + hidden input ──
+    // UX: the OS file picker for this input is filtered to .glb / .gltf
+    // / .obj / .stl / .fbx so users with a model file don't have to
+    // navigate a multi-format dropdown. Selection still routes through
+    // `_importFile(file)` (which dispatches by extension) — keeping
+    // routing centralized in one place. The Wasm-only import button
+    // above is unaffected; this is a parallel path, not a replacement.
+    //
+    // Defense in depth: the `accept` attribute is best-effort across
+    // browsers (typing an arbitrary filename bypasses it). We guard
+    // the change handler so a user who pastes or types `.las` here
+    // gets a clear on-screen toast (not just a dev-only log line) and
+    // the file is NOT silently routed to GoPlugin. Uses the codebase-
+    // standard `state.emit('notification', ...)` channel so the toast
+    // UI already listening for notifications catches it.
+    //
+    // SOURCE OF TRUTH: `SUPPORTED_EXTS` is exported from
+    // plugins/ModelImportPlugin.js and consumed here. Adding a new
+    // format there automatically picks up here — no MasterApp edit
+    // AND no `index.html` edit: the dedicated input's accept list is
+    // JS-synced from `SUPPORTED_EXTS` below, so markup drift between
+    // the plugin const and the OS file picker is now impossible.
+    const MODEL_EXTS = Object.keys(SUPPORTED_EXTS);
+    const modelInput = document.getElementById('model-file-input');
+    // JS-sync #model-file-input.accept from SUPPORTED_EXTS so the
+    // markup does NOT carry a hardcoded accept list. Browsers build
+    // the OS file picker filter from this attribute; setting it here
+    // guarantees the picker always reflects the plugin's current
+    // SUPPORTED_EXTS regardless of what's in index.html.
+    modelInput?.setAttribute('accept', MODEL_EXTS.map((x) => '.' + x).join(','));
+    document.getElementById('btn-import-model')?.addEventListener('click', () => {
+      modelInput?.click();
+    });
+    modelInput?.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        const ext = file.name.split('.').pop()?.toLowerCase();
+        if (!MODEL_EXTS.includes(ext)) {
+          const msg = `"${file.name}" isn't a 3D model format (expected one of ${MODEL_EXTS.map((x) => '.' + x).join(', ')})`;
+          logger.warn('MasterApp', `3D Model button: ${msg}`);
+          this.state.emit('notification', { message: msg, type: 'warning' });
+        } else {
+          this._importFile(file);
+        }
+      }
+      modelInput.value = ''; // reset so the same file can be re-selected
     });
 
     // Drag & drop over the viewport
@@ -785,19 +1042,34 @@ export class MasterApp {
 
   async _importFile(file) {
     const go = this.plugins._plugins.get('Go');
-    if (!go) {
-      logger.warn('MasterApp', 'GoPlugin not registered');
-      return;
-    }
+    const modelImport = this.plugins._plugins.get('ModelImport');
 
     const ext = file.name.split('.').pop()?.toLowerCase();
-    const buffer = await file.arrayBuffer();
 
     let object = null;
     if (['las', 'ply'].includes(ext)) {
+      if (!go) {
+        logger.warn('MasterApp', 'GoPlugin not registered (required for point clouds)');
+        return;
+      }
+      const buffer = await file.arrayBuffer();
       object = await go.parsePointCloud(buffer);
     } else if (['step', 'iges', 'stp', 'igs'].includes(ext)) {
+      if (!go) {
+        logger.warn('MasterApp', 'GoPlugin not registered (required for CAD)');
+        return;
+      }
+      const buffer = await file.arrayBuffer();
       object = await go.importCAD(buffer);
+    } else if (['glb', 'gltf', 'obj', 'stl', 'fbx'].includes(ext)) {
+      // ModelImportPlugin handles its own file reading (OBJ needs text,
+      // the others need ArrayBuffer) so we pass the File object directly
+      // rather than pre-reading it.
+      if (!modelImport) {
+        logger.warn('MasterApp', 'ModelImportPlugin not registered (required for 3D models)');
+        return;
+      }
+      object = await modelImport.loadModel(file, ext);
     } else {
       logger.warn('MasterApp', 'Unsupported import format:', ext);
       return;
@@ -819,6 +1091,62 @@ export class MasterApp {
     logger.log('MasterApp', 'Imported', file.name, '→', object.name);
   }
 
+  // ── History / File-Action Buttons (HTML → window CustomEvent) ──
+  //
+  // The 5 buttons added to `index.html` (#btn-undo, #btn-redo,
+  // #btn-save-scene, #btn-load-scene, #btn-clear-scene) just dispatch
+  // window events. `_wireMenuEvents` is the listener side and routes
+  // them to the UndoManager + SceneIO services. Splitting the wiring
+  // this way keeps HTML declarative (no business logic in markup) and
+  // makes the events easy to trigger from devtools / tests / future
+  // menus.
+  /**
+   * Read a File (selected via the hidden scene-load input or a
+   * backward-compat file picker) as text, parse it as JSON, and
+   * dispatch the low-level `scene:load` event with
+   * `detail: { name, json: <parsed object> }`. Consumed by SceneIO.
+   *
+   * Single source of truth for the FileReader + JSON.parse + dispatch
+   * dance — the HTML button path and the backward-compat `loadScene`
+   * listener both call this so a JSON-parse bug only needs to be
+   * fixed in one place.
+   */
+  _readJsonFileToSceneLoadEvent(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      let parsed;
+      try {
+        parsed = JSON.parse(reader.result);
+      } catch (err) {
+        logger.error('MasterApp', `loadScene: invalid JSON in ${file.name}: ${err.message || err}`);
+        window.dispatchEvent(new CustomEvent('scene:load:error', { detail: { name: file.name, error: err } }));
+        return;
+      }
+      window.dispatchEvent(new CustomEvent('scene:load', { detail: { name: file.name, json: parsed } }));
+    };
+    reader.onerror = () => {
+      logger.error('MasterApp', 'loadScene: FileReader error:', reader.error);
+    };
+    reader.readAsText(file);
+  }
+
+  _wireHistoryActions() {
+    const dispatch = (name) => () => window.dispatchEvent(new Event(name));
+    document.getElementById('btn-undo')?.addEventListener('click', dispatch('undoAction'));
+    document.getElementById('btn-redo')?.addEventListener('click', dispatch('redoAction'));
+    document.getElementById('btn-save-scene')?.addEventListener('click', dispatch('saveScene'));
+    document.getElementById('btn-clear-scene')?.addEventListener('click', dispatch('clearScene'));
+    // Load: click the hidden file input; the `change` listener reads
+    // the file via the shared helper and dispatches `scene:load`.
+    const loadInput = document.getElementById('scene-load-input');
+    document.getElementById('btn-load-scene')?.addEventListener('click', () => loadInput?.click());
+    loadInput?.addEventListener('change', (e) => {
+      this._readJsonFileToSceneLoadEvent(e.target.files?.[0]);
+      loadInput.value = ''; // allow re-selecting the same file
+    });
+  }
+
   // ── Menu Event Wiring (CustomEvent → plugin methods) ──
   _wireMenuEvents() {
     const selection = this.plugins._plugins.get('Selection');
@@ -829,6 +1157,45 @@ export class MasterApp {
     window.addEventListener('invertSelection', () => selection?.invertSelection());
     window.addEventListener('group', () => selection?.groupSelected());
     window.addEventListener('ungroup', () => selection?.ungroupSelected());
+
+    // Save / Load / Clear scene (SceneIO listens for the underlying
+    // scene:save / scene:load / scene:clear window events; we just
+    // dispatch from the menu-level "saveScene" / "loadScene" /
+    // "clearScene" events that the brutalist menu UIs emit). For
+    // load, we open a hidden file input so the user can pick a JSON
+    // scene file from disk.
+    window.addEventListener('saveScene', () => {
+      window.dispatchEvent(new CustomEvent('scene:save', { detail: { format: 'json' } }));
+    });
+    window.addEventListener('loadScene', () => {
+      // Backward-compat path: any dispatch site (devtools, future
+      // menus) that fires `loadScene` without already having read the
+      // file. We open a hidden file input and route through the
+      // shared `_readJsonFileToSceneLoadEvent` helper. The HTML
+      // button side (`_wireHistoryActions`) already reads + dispatches
+      // `scene:load` directly, so it skips this listener entirely.
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json';
+      input.style.display = 'none';
+      document.body.appendChild(input);
+      input.addEventListener('change', (ev) => {
+        this._readJsonFileToSceneLoadEvent(ev.target.files && ev.target.files[0]);
+        document.body.removeChild(input);
+      });
+      input.click();
+    });
+    window.addEventListener('clearScene', () => {
+      // Confirm before destructive op so users don't lose work.
+      if (window.confirm('Clear the scene? Lights will be preserved.')) {
+        window.dispatchEvent(new CustomEvent('scene:clear'));
+      }
+    });
+    // Undo / Redo (UndoManager's bindKeyboard() already handles the
+    // global key listener; these events let the menu trigger the
+    // same actions without a keyboard).
+    window.addEventListener('undoAction', () => this.plugins._plugins.get('UndoManager')?.undo?.());
+    window.addEventListener('redoAction', () => this.plugins._plugins.get('UndoManager')?.redo?.());
 
     // Primitives: spawn via the same logic as btn-add-cube
     window.addEventListener('addPrimitive', async (e) => {
@@ -992,13 +1359,35 @@ export class MasterApp {
       }
     });
 
-    // Delete selected (also remove physics bodies + water cube-camera RTTs)
+    // Delete selected (also remove physics bodies + tracked GFX resources)
     window.addEventListener('delete', () => {
       const sel = this.state.data.selectedObjects;
       if (sel?.length) {
         const bodies = this.state.data.physicsBodies;
+        const sm = this.plugins._plugins.get('StateManager');
+        const mocap = this.plugins._plugins.get('MoCap');
         sel.forEach(obj => {
           if (bodies) bodies.delete(obj.uuid);
+          // Release any GFX resources tracked on this object (point
+          // cloud geometry, CAD group, light shadow map, etc.) BEFORE
+          // removing from the scene. Water has its own release path
+          // via the water:dispose event below because it also needs
+          // to dispose the Water object's material + render target.
+          if (sm && obj.userData && obj.userData.gfxResourceId && !obj.userData.isWater) {
+            sm.releaseGfxResource(obj.userData.gfxResourceId);
+            delete obj.userData.gfxResourceId;
+          }
+          // Unregister any MoCap retargeter targets bound to this
+          // object. Without this the next frame's _processLandmarks
+          // would try to write `bone.quaternion` on a detached /
+          // disposed skeleton. We unregister by the object's name
+          // (the convention is to register targets with the rig's
+          // mesh name as the targetId). Skeletons registered under
+          // a custom id must be unregistered manually via
+          // `MoCapPlugin.unregisterTarget(customId)`.
+          if (mocap && obj.name) {
+            mocap.unregisterTarget(obj.name);
+          }
           this.scene.remove(obj);
           // WaterPlugin holds a cubemap `WebGLRenderTarget` per water mesh.
           // Detaching from scene alone leaks that GFX memory. Notify the
@@ -1030,13 +1419,12 @@ export class MasterApp {
     });
   }
 
-  // ── Debug Panel Update (throttled to ~1/sec) ──
-  _updateDebugPanel(deltaTime) {
-    if (this._debugPanelAcc === undefined) this._debugPanelAcc = 0;
-    this._debugPanelAcc += deltaTime;
-    if (this._debugPanelAcc < 1.0) return;
-    this._debugPanelAcc = 0;
-
+  // ── Debug Panel Update (1 Hz) ────────────────────────────────────────────────
+  // Called by `_setupBackgroundWork()` on a setInterval(1000ms). The
+  // previous accumulator-based throttle (`_debugPanelAcc += deltaTime`)
+  // is no longer needed because the setInterval IS the throttle; the
+  // `deltaTime` parameter has therefore been dropped.
+  _updateDebugPanel() {
     const stateMgr = this.plugins._plugins.get('StateManager');
     if (!stateMgr) return;
 
@@ -1062,7 +1450,45 @@ export class MasterApp {
     set('dbg-listeners', stateMgr._listeners.size);
   }
 
+  // ── Background Work (low-rate, off the rAF path) ──────────────────────────────
+  /**
+   * Start low-rate timers whose work is too expensive to run inside the
+   * render loop. Currently just the 1Hz StateManager debug-panel update.
+   *
+   * Future home for: AI telemetry buffer flushes, GfxResourcePanel counts,
+   * MemoryExpert periodic sweeps — anything that doesn't need to refresh
+   * 60 times per second and would only add noise to the frame budget.
+   *
+   * See comment in `_animate()` for the rationale on keeping the cube
+   * overlay (WaterDebugOverlay) in rAF despite its 30Hz cadence.
+   */
+  _setupBackgroundWork() {
+    if (this._debugPanelInterval) {
+      logger.warn('MasterApp', '_setupBackgroundWork called twice — clearing previous interval.');
+      clearInterval(this._debugPanelInterval);
+    }
+    this._debugPanelInterval = setInterval(() => this._updateDebugPanel(), 1000);
+  }
+
+  /**
+   * Tear down background-work timers + break the rAF chain. Called from
+   * the `beforeunload` listener installed in `init()`. Safe to call
+   * multiple times — each cleanup is guarded by a `_stopped` / null check.
+   */
+  _stopRenderLoop() {
+    if (this._debugPanelInterval !== null) {
+      clearInterval(this._debugPanelInterval);
+      this._debugPanelInterval = null;
+    }
+    this._stopped = true;
+    logger.log('MasterApp', 'Render loop + background work stopped.');
+  }
+
   _animate() {
+    // Break the rAF re-arming chain if Stop was called. The composer /
+    // state-machine may have already been torn down by a hot-reload,
+    // so doing any of the work below could throw.
+    if (this._stopped) return;
     requestAnimationFrame(() => this._animate());
 
     const deltaTime = this.clock.getDelta();
@@ -1102,13 +1528,37 @@ export class MasterApp {
     // 5. Render
     this.composer.render();
 
-    // 6. Update StateManager debug panel (once per second)
-    this._updateDebugPanel(deltaTime);
+    // 5a. If SBS stereoscopic is active, draw the right-eye half
+    //     AFTER the composer's regular render. The L pass uses the
+    //     main camera (now _stereoCamL) with a left-half view offset;
+    //     this call draws the R pass with a right-half viewport.
+    this.plugins._plugins.get('Lighting')?.renderStereoRightHalf();
+
+    // Debug panel (1Hz DOM textContent writes) lives on a setInterval
+    // in _setupBackgroundWork() — see that method for the rationale.
+    //
+    // Cube overlay (WaterDebugOverlay.update via plugins.update above)
+    // intentionally stays in rAF despite its 30Hz cadence: a
+    // setInterval-driven readRenderTargetPixels() is uncorrelated with
+    // the render frame, so it can read stale, empty, or about-to-be-
+    // disposed RTTs. JS is also single-threaded, so any GPU stall
+    // would block the next rAF anyway. The wasted ~60Hz calls here
+    // early-return on the plugin's internal 33ms throttle (~0.05–0.5ms/s
+    // total, dominated by perf.now()); refactoring PluginManager to
+    // support per-plugin scheduling is YAGNI.
   }
 }
 
 // ── Bootstrap ──
 // Expose on window so external pages (studios, debug panels) can read scene/camera
 // without having to import MasterApp class directly.
-window.app = new MasterApp();
-window.app.init().catch((err) => logger.error('MasterApp', err));
+//
+// Guarded with typeof window — Node ESM (test runners, utility scripts) can
+// still import MasterApp as a class. Without this check, the line below
+// throws a ReferenceError at module-load time when the file is imported in
+// Node (no `window` global), which is fatal for `node --test` even before
+// any test runs.
+if (typeof window !== 'undefined') {
+  window.app = new MasterApp();
+  window.app.init().catch((err) => logger.error('MasterApp', err));
+}
